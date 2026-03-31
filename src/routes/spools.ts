@@ -36,19 +36,19 @@ router.get('/:spoolId', async (req: Request, res: Response) => {
 
     const [materials, unions, cuts, metadata] = await Promise.all([
       pool.query(
-        'SELECT material_id, material_type, quantity, unit, specification, confidence_score FROM material WHERE spool_id = $1',
+        'SELECT material_id, raw_data, confidence_score FROM material WHERE spool_id = $1',
         [spoolId]
       ),
       pool.query(
-        'SELECT union_id, union_type, size, quantity, specification, confidence_score FROM spool_union WHERE spool_id = $1',
+        'SELECT union_id, raw_data, confidence_score FROM spool_union WHERE spool_id = $1',
         [spoolId]
       ),
       pool.query(
-        'SELECT cut_id, cut_type, location, angle, quantity, specification, confidence_score FROM cut WHERE spool_id = $1',
+        'SELECT cut_id, raw_data, confidence_score FROM cut WHERE spool_id = $1',
         [spoolId]
       ),
       pool.query(
-        'SELECT drawing_number, revision, date_created, material_grade, pressure_rating, temperature_rating, total_weight, weight_unit, notes, confidence_score FROM spool_metadata WHERE spool_id = $1',
+        'SELECT raw_data, confidence_score FROM spool_metadata WHERE spool_id = $1',
         [spoolId]
       ),
     ]);
