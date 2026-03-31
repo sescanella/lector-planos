@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { env } from './config/env';
 import { checkDatabaseConnection, getPool, initDatabase } from './db';
 import { initQueue, shutdownQueue, startWorker, checkRedisConnection } from './services/queue';
@@ -16,6 +17,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'X-API-Key'],
 }));
 app.use(express.json({ limit: '100kb' }));
+
+// Serve static frontend files
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Hello world
 app.get('/', (_req, res) => {
