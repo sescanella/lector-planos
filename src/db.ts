@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { env } from './config/env';
+import { runMigrations } from './db/migrate';
 
 let pool: Pool | null = null;
 
@@ -9,7 +10,7 @@ export function getPool(): Pool | null {
   if (!pool) {
     pool = new Pool({
       connectionString: env.DATABASE_URL,
-      max: 10,
+      max: 20,
     });
 
     pool.on('error', (err) => {
@@ -41,6 +42,8 @@ export async function initDatabase(): Promise<void> {
   const connected = await checkDatabaseConnection();
   if (connected) {
     console.log('Database connected successfully');
+    const p = getPool()!;
+    await runMigrations(p);
   } else {
     console.log('Database connection failed — server will start in degraded mode');
   }
