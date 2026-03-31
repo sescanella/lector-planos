@@ -1,5 +1,6 @@
 import express from 'express';
 import { env } from './config/env';
+import { checkDatabaseConnection, initDatabase } from './db';
 
 const app = express();
 
@@ -13,8 +14,23 @@ app.get('/', (_req, res) => {
   });
 });
 
-app.listen(env.PORT, () => {
-  console.log(`BlueprintAI server listening on port ${env.PORT}`);
+app.get('/health', async (_req, res) => {
+  const dbConnected = await checkDatabaseConnection();
+  res.json({
+    status: dbConnected ? 'healthy' : 'degraded',
+    database: dbConnected ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString(),
+  });
 });
+
+async function start() {
+  await initDatabase();
+
+  app.listen(env.PORT, () => {
+    console.log(`BlueprintAI server listening on port ${env.PORT}`);
+  });
+}
+
+start();
 
 export default app;
