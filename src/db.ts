@@ -10,7 +10,7 @@ export function getPool(): Pool | null {
   if (!pool) {
     pool = new Pool({
       connectionString: env.DATABASE_URL,
-      max: 20,
+      max: env.DB_POOL_MAX,
     });
 
     pool.on('error', (err) => {

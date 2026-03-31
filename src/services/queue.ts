@@ -2,7 +2,8 @@ import { Queue, Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
 import { env } from '../config/env';
 
-let connection: IORedis | null = null;
+let queueConnection: IORedis | null = null;
+let workerConnection: IORedis | null = null;
 let queue: Queue | null = null;
 let worker: Worker | null = null;
 
@@ -10,21 +11,17 @@ const QUEUE_NAME = 'pdf-extraction';
 const CONCURRENCY = 5;
 const JOB_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
-function getConnection(): IORedis | null {
+function createConnection(): IORedis | null {
   if (!env.REDIS_URL) return null;
-
-  if (!connection) {
-    connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
-  }
-  return connection;
+  return new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 }
 
 export function getQueue(): Queue | null {
-  const conn = getConnection();
-  if (!conn) return null;
+  if (!env.REDIS_URL) return null;
 
   if (!queue) {
-    queue = new Queue(QUEUE_NAME, { connection: conn });
+    queueConnection = createConnection()!;
+    queue = new Queue(QUEUE_NAME, { connection: queueConnection });
   }
   return queue;
 }
@@ -39,16 +36,16 @@ export interface ExtractionJobData {
 export type ProcessorFn = (job: Job<ExtractionJobData>) => Promise<void>;
 
 export function startWorker(processor: ProcessorFn): Worker | null {
-  const conn = getConnection();
-  if (!conn) return null;
-
+  if (!env.REDIS_URL) return null;
   if (worker) return worker;
+
+  workerConnection = createConnection()!;
 
   worker = new Worker<ExtractionJobData>(
     QUEUE_NAME,
     processor,
     {
-      connection: conn,
+      connection: workerConnection,
       concurrency: CONCURRENCY,
       lockDuration: JOB_TIMEOUT,
     }
@@ -72,7 +69,7 @@ export async function addExtractionJob(data: ExtractionJobData): Promise<string>
 
   const job = await q.add('extract-pdf', data, {
     attempts: 3,
-    backoff: { type: 'custom', delay: 1000 },
+    backoff: { type: 'exponential', delay: 1000 },
     removeOnComplete: { age: 7 * 24 * 3600 },
     removeOnFail: false,
   });
@@ -101,8 +98,12 @@ export async function shutdownQueue(): Promise<void> {
     await queue.close();
     queue = null;
   }
-  if (connection) {
-    await connection.quit();
-    connection = null;
+  if (workerConnection) {
+    await workerConnection.quit();
+    workerConnection = null;
+  }
+  if (queueConnection) {
+    await queueConnection.quit();
+    queueConnection = null;
   }
 }

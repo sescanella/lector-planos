@@ -76,7 +76,7 @@ async function start() {
 
   // Force exit after 30 seconds
   const forceShutdown = (signal: string) => {
-    shutdown(signal);
+    shutdown(signal).catch(err => console.error('Shutdown error:', err));
     setTimeout(() => {
       console.error('Forced shutdown after 30s timeout');
       process.exit(1);

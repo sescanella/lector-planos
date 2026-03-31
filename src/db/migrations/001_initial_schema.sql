@@ -1,11 +1,9 @@
 -- 001_initial_schema.sql
 -- Creates all tables for BlueprintAI extraction pipeline
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- Extraction Job: batch upload and processing session
 CREATE TABLE IF NOT EXISTS extraction_job (
-  job_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  job_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
@@ -17,11 +15,11 @@ CREATE TABLE IF NOT EXISTS extraction_job (
 
 -- PDF File: uploaded PDF and its processing state
 CREATE TABLE IF NOT EXISTS pdf_file (
-  file_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  file_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   job_id UUID NOT NULL REFERENCES extraction_job(job_id) ON DELETE CASCADE,
   original_filename VARCHAR(512) NOT NULL,
   s3_key VARCHAR(1024) NOT NULL,
-  file_size_bytes INTEGER NOT NULL CHECK (file_size_bytes >= 0),
+  file_size_bytes BIGINT NOT NULL CHECK (file_size_bytes >= 0),
   page_count INTEGER NOT NULL DEFAULT 0,
   status VARCHAR(20) NOT NULL DEFAULT 'uploaded' CHECK (status IN ('uploaded', 'processing', 'completed', 'failed')),
   uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -32,7 +30,7 @@ CREATE TABLE IF NOT EXISTS pdf_file (
 
 -- Spool: single spool extracted from a PDF page
 CREATE TABLE IF NOT EXISTS spool (
-  spool_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  spool_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   file_id UUID NOT NULL REFERENCES pdf_file(file_id) ON DELETE CASCADE,
   page_number INTEGER NOT NULL CHECK (page_number > 0),
   spool_number VARCHAR(255) NOT NULL,
@@ -43,7 +41,7 @@ CREATE TABLE IF NOT EXISTS spool (
 
 -- Material: material component in a spool
 CREATE TABLE IF NOT EXISTS material (
-  material_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  material_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   spool_id UUID NOT NULL REFERENCES spool(spool_id) ON DELETE CASCADE,
   material_type VARCHAR(255) NOT NULL,
   quantity DECIMAL NOT NULL CHECK (quantity >= 0),
@@ -54,9 +52,10 @@ CREATE TABLE IF NOT EXISTS material (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Union: joint or connection in a spool
-CREATE TABLE IF NOT EXISTS "union" (
-  union_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- Spool Union (weld/joint): joint or connection in a spool
+-- Named spool_union to avoid SQL reserved word "union"
+CREATE TABLE IF NOT EXISTS spool_union (
+  union_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   spool_id UUID NOT NULL REFERENCES spool(spool_id) ON DELETE CASCADE,
   union_type VARCHAR(255) NOT NULL,
   size VARCHAR(100),
@@ -69,7 +68,7 @@ CREATE TABLE IF NOT EXISTS "union" (
 
 -- Cut: cut or section in a spool
 CREATE TABLE IF NOT EXISTS cut (
-  cut_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  cut_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   spool_id UUID NOT NULL REFERENCES spool(spool_id) ON DELETE CASCADE,
   cut_type VARCHAR(255) NOT NULL,
   location VARCHAR(255),
@@ -83,7 +82,7 @@ CREATE TABLE IF NOT EXISTS cut (
 
 -- Spool Metadata: extracted metadata about a spool
 CREATE TABLE IF NOT EXISTS spool_metadata (
-  metadata_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  metadata_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   spool_id UUID NOT NULL UNIQUE REFERENCES spool(spool_id) ON DELETE CASCADE,
   drawing_number VARCHAR(255),
   revision VARCHAR(50),
@@ -101,7 +100,7 @@ CREATE TABLE IF NOT EXISTS spool_metadata (
 
 -- Correction: user feedback and corrections to extracted data
 CREATE TABLE IF NOT EXISTS correction (
-  correction_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  correction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   spool_id UUID NOT NULL REFERENCES spool(spool_id) ON DELETE CASCADE,
   field_type VARCHAR(20) NOT NULL CHECK (field_type IN ('material', 'union', 'cut', 'metadata')),
   field_id UUID,
@@ -118,7 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_pdf_file_job_status ON pdf_file(job_id, status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pdf_file_s3_key ON pdf_file(s3_key);
 CREATE INDEX IF NOT EXISTS idx_spool_file_number ON spool(file_id, spool_number);
 CREATE INDEX IF NOT EXISTS idx_material_spool ON material(spool_id);
-CREATE INDEX IF NOT EXISTS idx_union_spool ON "union"(spool_id);
+CREATE INDEX IF NOT EXISTS idx_union_spool ON spool_union(spool_id);
 CREATE INDEX IF NOT EXISTS idx_cut_spool ON cut(spool_id);
 CREATE INDEX IF NOT EXISTS idx_spool_metadata_spool ON spool_metadata(spool_id);
 CREATE INDEX IF NOT EXISTS idx_correction_spool_created ON correction(spool_id, created_at);

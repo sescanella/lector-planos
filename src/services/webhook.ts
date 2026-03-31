@@ -9,10 +9,21 @@ interface WebhookPayload {
   error_message?: string;
 }
 
+function sanitizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return '[invalid-url]';
+  }
+}
+
 export async function sendWebhook(
   webhookUrl: string,
   payload: WebhookPayload
 ): Promise<boolean> {
+  const safeUrl = sanitizeUrl(webhookUrl);
+
   for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
     try {
       const controller = new AbortController();
@@ -28,26 +39,26 @@ export async function sendWebhook(
       clearTimeout(timeout);
 
       if (response.ok) {
-        console.log(`Webhook delivered: ${webhookUrl} (job: ${payload.job_id}, attempt: ${attempt + 1})`);
+        console.log(`Webhook delivered: ${safeUrl} (job: ${payload.job_id}, attempt: ${attempt + 1})`);
         return true;
       }
 
-      console.warn(`Webhook failed: ${webhookUrl} (status: ${response.status}, attempt: ${attempt + 1})`);
+      console.warn(`Webhook failed: ${safeUrl} (status: ${response.status}, attempt: ${attempt + 1})`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      console.warn(`Webhook error: ${webhookUrl} (${message}, attempt: ${attempt + 1})`);
+      console.warn(`Webhook error: ${safeUrl} (${message}, attempt: ${attempt + 1})`);
     }
 
-    // Wait before retry (skip delay on last attempt)
     if (attempt < RETRY_DELAYS.length) {
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
     }
   }
 
-  console.error(`Webhook delivery failed after ${RETRY_DELAYS.length + 1} attempts: ${webhookUrl} (job: ${payload.job_id})`);
+  console.error(`Webhook delivery failed after ${RETRY_DELAYS.length + 1} attempts: ${safeUrl} (job: ${payload.job_id})`);
   return false;
 }
 
+// Note: called by the extraction worker when job processing completes (REQ-10/11)
 export async function notifyJobCompletion(
   webhookUrl: string | null,
   jobId: string,
