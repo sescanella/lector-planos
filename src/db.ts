@@ -11,6 +11,8 @@ export function getPool(): Pool | null {
     pool = new Pool({
       connectionString: env.DATABASE_URL,
       max: env.DB_POOL_MAX,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
     });
 
     pool.on('error', (err) => {

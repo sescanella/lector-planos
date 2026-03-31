@@ -28,7 +28,7 @@ router.get('/:spoolId', async (req: Request, res: Response) => {
     );
 
     if (spoolRows.length === 0) {
-      res.status(404).json({ error: 'not_found', message: 'Spool not found', spool_id: spoolId });
+      res.status(404).json({ error: 'not_found', message: 'Spool not found', resource_id: spoolId });
       return;
     }
 
@@ -63,7 +63,7 @@ router.get('/:spoolId', async (req: Request, res: Response) => {
       cuts: cuts.rows,
     });
   } catch (err) {
-    console.error('Error getting spool:', err);
+    console.error('Error getting spool:', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'internal_error', message: 'An unexpected error occurred' });
   }
 });
@@ -89,7 +89,7 @@ router.post('/:spoolId/corrections', async (req: Request, res: Response) => {
     );
 
     if (spoolRows.length === 0) {
-      res.status(404).json({ error: 'not_found', message: 'Spool not found', spool_id: spoolId });
+      res.status(404).json({ error: 'not_found', message: 'Spool not found', resource_id: spoolId });
       return;
     }
 
@@ -131,7 +131,7 @@ router.post('/:spoolId/corrections', async (req: Request, res: Response) => {
 
     res.status(201).json(rows[0]);
   } catch (err) {
-    console.error('Error creating correction:', err);
+    console.error('Error creating correction:', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'internal_error', message: 'An unexpected error occurred' });
   }
 });

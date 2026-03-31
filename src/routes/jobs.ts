@@ -8,7 +8,7 @@ import { isValidUUID } from '../utils/validation';
 
 const router = Router();
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB — single planos ~1MB, multi-page documents up to ~30MB
 const MAX_FILES_PER_JOB = 200;
 
 const upload = multer({
@@ -25,37 +25,18 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const { webhook_url } = req.body || {};
-
-    if (webhook_url) {
-      try {
-        const url = new URL(webhook_url);
-        if (url.protocol !== 'https:') {
-          res.status(400).json({
-            error: 'validation_error',
-            message: 'Webhook URL must use HTTPS',
-            details: [{ field: 'webhook_url', message: 'Must be HTTPS' }],
-          });
-          return;
-        }
-      } catch {
-        res.status(400).json({
-          error: 'validation_error',
-          message: 'Invalid webhook URL',
-          details: [{ field: 'webhook_url', message: 'Must be a valid URL' }],
-        });
-        return;
-      }
-    }
+    // TODO: Implement webhook allowlist (WEBHOOK_ALLOWED_DOMAINS) before enabling webhooks
+    // Webhook URL is accepted but ignored until allowlist is in place
+    const _webhookUrl = (req.body || {}).webhook_url; // eslint-disable-line @typescript-eslint/no-unused-vars
 
     const { rows } = await pool.query(
       `INSERT INTO extraction_job (webhook_url) VALUES ($1) RETURNING job_id, status, created_at, webhook_url`,
-      [webhook_url || null]
+      [null]
     );
 
     res.status(201).json(rows[0]);
   } catch (err) {
-    console.error('Error creating job:', err);
+    console.error('Error creating job:', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'internal_error', message: 'An unexpected error occurred' });
   }
 });
@@ -75,6 +56,7 @@ router.post('/:jobId/upload', upload.array('files', MAX_FILES_PER_JOB), async (r
       return;
     }
 
+    // TODO: Move this SELECT inside the transaction with FOR UPDATE when supporting concurrent uploads
     const { rows: jobRows } = await pool.query(
       'SELECT job_id, status, file_count FROM extraction_job WHERE job_id = $1',
       [jobId]
@@ -122,6 +104,16 @@ router.post('/:jobId/upload', upload.array('files', MAX_FILES_PER_JOB), async (r
           error: 'invalid_file_type',
           message: 'Only PDF files are accepted',
           file_type: file.mimetype,
+          filename: file.originalname,
+        });
+        return;
+      }
+      const pdfMagicBytes = file.buffer.slice(0, 5).toString();
+      if (pdfMagicBytes !== '%PDF-') {
+        res.status(415).json({
+          error: 'invalid_file_content',
+          message: 'File does not appear to be a valid PDF',
+          filename: file.originalname,
         });
         return;
       }
@@ -138,6 +130,7 @@ router.post('/:jobId/upload', upload.array('files', MAX_FILES_PER_JOB), async (r
     // Upload files with S3+DB transaction safety
     const fileRecords = [];
     const uploadedS3Keys: { jobId: string; fileId: string }[] = [];
+    const pendingJobs: { jobId: string; fileId: string; s3Key: string; filename: string }[] = [];
 
     const client = await pool.connect();
     try {
@@ -154,11 +147,7 @@ router.post('/:jobId/upload', upload.array('files', MAX_FILES_PER_JOB), async (r
           [fileId, jobId, file.originalname, s3Key, file.size]
         );
 
-        try {
-          await addExtractionJob({ jobId, fileId, s3Key, filename: file.originalname });
-        } catch {
-          console.warn(`Could not queue extraction for file ${fileId} — queue may not be configured`);
-        }
+        pendingJobs.push({ jobId, fileId, s3Key, filename: file.originalname });
 
         fileRecords.push({
           file_id: fileId,
@@ -189,6 +178,15 @@ router.post('/:jobId/upload', upload.array('files', MAX_FILES_PER_JOB), async (r
       client.release();
     }
 
+    // Enqueue extraction jobs after successful commit
+    for (const pending of pendingJobs) {
+      try {
+        await addExtractionJob(pending);
+      } catch (err) {
+        console.error(`Could not queue extraction for file ${pending.fileId} — queue may not be configured:`, err);
+      }
+    }
+
     res.status(202).json({
       job_id: jobId,
       status: 'processing',
@@ -196,7 +194,7 @@ router.post('/:jobId/upload', upload.array('files', MAX_FILES_PER_JOB), async (r
       files: fileRecords,
     });
   } catch (err) {
-    console.error('Error uploading files:', err);
+    console.error('Error uploading files:', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'internal_error', message: 'An unexpected error occurred' });
   }
 });
@@ -233,7 +231,7 @@ router.get('/:jobId', async (req: Request, res: Response) => {
 
     res.json({ ...jobRows[0], files: fileRows });
   } catch (err) {
-    console.error('Error getting job:', err);
+    console.error('Error getting job:', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'internal_error', message: 'An unexpected error occurred' });
   }
 });

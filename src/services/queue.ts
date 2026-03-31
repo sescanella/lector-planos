@@ -13,7 +13,9 @@ const JOB_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 function createConnection(): IORedis | null {
   if (!env.REDIS_URL) return null;
-  return new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+  const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+  connection.on('error', (err) => console.error('Redis connection error:', err));
+  return connection;
 }
 
 export function getQueue(): Queue | null {
@@ -71,7 +73,7 @@ export async function addExtractionJob(data: ExtractionJobData): Promise<string>
     attempts: 3,
     backoff: { type: 'exponential', delay: 1000 },
     removeOnComplete: { age: 7 * 24 * 3600 },
-    removeOnFail: false,
+    removeOnFail: { age: 7 * 24 * 3600 },
   });
 
   console.log(`Queued extraction job: ${job.id} (file: ${data.fileId})`);
@@ -86,6 +88,17 @@ export async function initQueue(): Promise<void> {
 
   getQueue();
   console.log(`BullMQ queue initialized: ${QUEUE_NAME}`);
+}
+
+export async function checkRedisConnection(): Promise<boolean> {
+  try {
+    const conn = queueConnection;
+    if (!conn) return false;
+    const result = await conn.ping();
+    return result === 'PONG';
+  } catch {
+    return false;
+  }
 }
 
 export async function shutdownQueue(): Promise<void> {

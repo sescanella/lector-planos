@@ -19,4 +19,13 @@ export const env = {
   S3_BUCKET_NAME: process.env.S3_BUCKET_NAME || '',
   // Redis
   REDIS_URL: process.env.REDIS_URL || '',
+  // Authentication
+  API_KEY: process.env.API_KEY || '',
+  // CORS
+  CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
 };
+
+// Fail fast in production if S3 is not configured
+if (env.NODE_ENV === 'production' && !env.S3_BUCKET_NAME) {
+  throw new Error('S3_BUCKET_NAME is required in production');
+}

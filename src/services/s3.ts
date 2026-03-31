@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadBucketCommand,
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { Readable } from 'stream';
@@ -30,8 +31,8 @@ export async function uploadPdf(
   const key = buildKey(jobId, fileId);
   const s3 = getClient();
 
-  // Use multipart upload for files > 100MB
-  if (sizeBytes > 100 * 1024 * 1024) {
+  // Use multipart upload for files > 5MB (AWS best practice)
+  if (sizeBytes > 5 * 1024 * 1024) {
     const upload = new Upload({
       client: s3,
       params: {
@@ -69,6 +70,17 @@ export async function downloadPdf(
 
   console.log(`S3 download: ${key}`);
   return response.Body as Readable;
+}
+
+export async function checkS3Connection(): Promise<boolean> {
+  if (!env.S3_BUCKET_NAME) return false;
+  try {
+    const s3 = getClient();
+    await s3.send(new HeadBucketCommand({ Bucket: env.S3_BUCKET_NAME }));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function deletePdf(

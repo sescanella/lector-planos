@@ -119,5 +119,25 @@ CREATE INDEX IF NOT EXISTS idx_spool_file_number ON spool(file_id, spool_number)
 CREATE INDEX IF NOT EXISTS idx_material_spool ON material(spool_id);
 CREATE INDEX IF NOT EXISTS idx_union_spool ON spool_union(spool_id);
 CREATE INDEX IF NOT EXISTS idx_cut_spool ON cut(spool_id);
-CREATE INDEX IF NOT EXISTS idx_spool_metadata_spool ON spool_metadata(spool_id);
 CREATE INDEX IF NOT EXISTS idx_correction_spool_created ON correction(spool_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_correction_field ON correction(field_type, field_id);
+
+-- Auto-update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON spool
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON material
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON spool_union
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON cut
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON spool_metadata
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

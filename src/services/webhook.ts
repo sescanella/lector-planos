@@ -22,6 +22,11 @@ export async function sendWebhook(
   webhookUrl: string,
   payload: WebhookPayload
 ): Promise<boolean> {
+  // TODO: Webhooks disabled until allowlist is implemented
+  console.log('Webhook notification skipped (webhooks not yet enabled)');
+  return false;
+
+  /* Dead code — retry logic preserved for when webhooks are re-enabled
   const safeUrl = sanitizeUrl(webhookUrl);
 
   for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
@@ -44,7 +49,7 @@ export async function sendWebhook(
       }
 
       console.warn(`Webhook failed: ${safeUrl} (status: ${response.status}, attempt: ${attempt + 1})`);
-    } catch (err) {
+    } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       console.warn(`Webhook error: ${safeUrl} (${message}, attempt: ${attempt + 1})`);
     }
@@ -56,6 +61,7 @@ export async function sendWebhook(
 
   console.error(`Webhook delivery failed after ${RETRY_DELAYS.length + 1} attempts: ${safeUrl} (job: ${payload.job_id})`);
   return false;
+  */
 }
 
 // Note: called by the extraction worker when job processing completes (REQ-10/11)

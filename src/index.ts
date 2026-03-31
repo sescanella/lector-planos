@@ -1,13 +1,21 @@
 import express from 'express';
+import cors from 'cors';
 import { env } from './config/env';
 import { checkDatabaseConnection, getPool, initDatabase } from './db';
-import { initQueue, shutdownQueue, startWorker } from './services/queue';
+import { initQueue, shutdownQueue, startWorker, checkRedisConnection } from './services/queue';
+import { checkS3Connection } from './services/s3';
 import jobsRouter from './routes/jobs';
 import spoolsRouter from './routes/spools';
+import { authMiddleware } from './middleware/auth';
 
 const app = express();
 
-app.use(express.json());
+app.use(cors({
+  origin: env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(','),
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'X-API-Key'],
+}));
+app.use(express.json({ limit: '100kb' }));
 
 // Hello world
 app.get('/', (_req, res) => {
@@ -20,25 +28,30 @@ app.get('/', (_req, res) => {
 
 // Health check
 app.get('/health', async (_req, res) => {
-  const dbConnected = await checkDatabaseConnection();
-  const status = dbConnected ? 'healthy' : 'degraded';
-  res.status(dbConnected ? 200 : 503).json({
-    status,
+  const [dbConnected, redisConnected, s3Connected] = await Promise.all([
+    checkDatabaseConnection(),
+    checkRedisConnection(),
+    checkS3Connection(),
+  ]);
+  const allHealthy = dbConnected && redisConnected && s3Connected;
+  res.status(allHealthy ? 200 : 503).json({
+    status: allHealthy ? 'healthy' : 'degraded',
     database: dbConnected ? 'connected' : 'disconnected',
+    redis: redisConnected ? 'connected' : 'disconnected',
+    s3: s3Connected ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString(),
   });
 });
 
 // API routes
+// TODO: Add rate limiting before multi-user support (express-rate-limit)
+app.use('/api/v1', authMiddleware);
 app.use('/api/v1/jobs', jobsRouter);
 app.use('/api/v1/spools', spoolsRouter);
 
 // 404 catch-all
 app.use((req, res) => {
-  res.status(404).json({
-    error: 'Not Found',
-    path: req.path,
-  });
+  res.status(404).json({ error: 'not_found', message: `Route not found: ${req.method} ${req.path}` });
 });
 
 async function start() {
@@ -61,7 +74,9 @@ async function start() {
     console.log(`${signal} received — shutting down gracefully`);
 
     // 1. Stop accepting new connections
-    server.close();
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
 
     // 2. Drain BullMQ workers and close Redis
     await shutdownQueue();
