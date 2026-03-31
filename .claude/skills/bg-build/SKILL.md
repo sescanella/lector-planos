@@ -1,7 +1,7 @@
 ---
 name: build
 description: Build a requirement with full task details and optional instructions
-allowed-tools: Bash(braingrid:*), Bash(git:*), Bash(npm:*), Read, Write, Grep, Glob, Skill(braingrid-cli), TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage, Task
+allowed-tools: Bash(braingrid:*), Bash(git:*), Bash(npm:*), Read, Write, Grep, Glob, Skill(braingrid-cli), Skill(audit-req), TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage, Task
 argument-hint: [requirement-id] [additional-instructions]
 ---
 
@@ -55,6 +55,24 @@ echo "REQ-{id}" > .braingrid/temp/build-active.local
 ```
 
 If the requirement ID is not yet known (auto-detection), create the sentinel after the build command resolves the ID. The sentinel MUST exist before any `TaskCreate` calls so hooks are active.
+
+**Pre-Build Audit (MANDATORY):**
+
+Before proceeding with the build, run the `audit-req` skill to validate the requirement against technical best practices:
+
+```
+Skill: audit-req
+Args: REQ-{id}
+```
+
+This audit checks for EOL runtime versions, missing deployment steps, API convention issues, security gaps, and consistency with CLAUDE.md. If the audit finds CRITICAL or MAJOR issues:
+1. The audit skill will propose fixes and ask the user to approve updating the REQ in BrainGrid
+2. After the REQ is updated, re-fetch it with `braingrid requirement show REQ-{id} --format markdown` to get the corrected content
+3. Continue the build with the corrected requirement
+
+Only proceed to the next steps after the audit completes with no CRITICAL/MAJOR issues remaining.
+
+---
 
 **Run Build Command:**
 
