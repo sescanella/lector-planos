@@ -204,7 +204,7 @@
   function escapeHtml(str) {
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
+    return div.innerHTML.replace(/"/g, '&quot;');
   }
 
   // --- Drag-and-drop events ---
@@ -246,12 +246,14 @@
 
   // --- Click to browse ---
   dropZone.addEventListener('click', function (e) {
+    if (uploadInProgress) return;
     // Don't trigger file input if clicking the browse button (it handles itself)
     if (e.target === browseBtn || browseBtn.contains(e.target)) return;
     fileInput.click();
   });
 
   dropZone.addEventListener('keydown', function (e) {
+    if (uploadInProgress) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       fileInput.click();
@@ -325,13 +327,20 @@
       if (mainContent) {
         mainContent.setAttribute('aria-busy', uploading ? 'true' : 'false');
       }
+      uploadBtn.disabled = uploading;
+      browseBtn.disabled = uploading;
       clearAllBtn.disabled = uploading;
       // Disable/enable all remove buttons
       var removeBtns = fileItems.querySelectorAll('.btn-remove');
       for (var i = 0; i < removeBtns.length; i++) {
         removeBtns[i].disabled = uploading;
       }
+      // When re-enabling, let updateUI recalculate correct disabled states
+      if (!uploading) {
+        updateUI();
+      }
     },
+    isUploading: function () { return uploadInProgress; },
     announce: announce,
     setJobBanner: function (text) {
       jobBanner.textContent = text;

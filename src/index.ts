@@ -19,6 +19,14 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '100kb' }));
 
+// Serve config.js with embedded API key for frontend auth
+app.get('/config.js', (_req, res) => {
+  const safeKey = env.API_KEY.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  res.type('application/javascript').send(
+    'window.__blueprintConfig={apiKey:"' + safeKey + '"};'
+  );
+});
+
 // Serve static frontend files (public/index.html serves at /)
 // Service info is available at GET /health
 app.use(express.static(path.join(__dirname, '..', 'public')));

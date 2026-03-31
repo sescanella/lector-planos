@@ -387,7 +387,7 @@
       padding: 0.625rem 1rem;
       margin-bottom: 1rem;
       font-size: 0.8125rem;
-      color: #E65100;
+      color: #BF360C;
       font-weight: 500;
     }
 
@@ -528,7 +528,7 @@
 </head>
 <body>
   <div class="container">
-    <header>
+    <header role="banner">
       <h1 class="logo">BlueprintAI</h1>
       <div class="subtitle">Extractor de Datos de Planos</div>
     </header>
@@ -538,7 +538,7 @@
       <div id="jobBanner" class="job-banner" role="status"></div>
 
       <!-- Drop zone -->
-      <div id="dropZone" class="drop-zone" tabindex="0" aria-label="Zona de carga de archivos PDF: arrastra archivos aqui o usa el boton para seleccionar">
+      <div id="dropZone" class="drop-zone" role="group" tabindex="0" aria-label="Zona de carga de archivos PDF: arrastra archivos aqui o usa el boton para seleccionar">
         <div class="drop-icon">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -556,7 +556,7 @@
       <!-- File list -->
       <div id="fileList" class="file-list" role="region" aria-label="Archivos seleccionados">
         <div class="file-list-header">
-          <span class="file-list-title">Archivos</span>
+          <h2 class="file-list-title">Archivos</h2>
           <span id="fileCountBadge" class="file-count-badge"></span>
         </div>
         <ul id="fileItems" class="file-items" aria-label="Lista de archivos"></ul>
@@ -593,7 +593,7 @@
 
       <!-- Info section -->
       <div class="info-section">
-        <div class="info-title">Requisitos</div>
+        <h2 class="info-title">Requisitos</h2>
         <div class="info-text">
           <strong>Formatos:</strong> PDF solamente<br>
           <strong>Tamano maximo:</strong> 50 MB por archivo<br>
@@ -603,6 +603,7 @@
     </main>
   </div>
 
+  <script src="/config.js"></script>
   <script src="app.js"></script>
   <script src="upload.js"></script>
 </body>

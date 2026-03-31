@@ -6,7 +6,49 @@
   if (!api) return;
 
   var API_BASE = '/api/v1';
-  var isUploading = false;
+
+  // Read API key from server-rendered config
+  function getApiKey() {
+    return (window.__blueprintConfig && window.__blueprintConfig.apiKey) || '';
+  }
+
+  // Set auth headers on an XHR request
+  function setAuthHeaders(xhr) {
+    var key = getApiKey();
+    if (key) {
+      xhr.setRequestHeader('X-API-Key', key);
+    }
+  }
+
+  // Check job status before adding more files
+  function checkJobStatus(jobId) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', API_BASE + '/jobs/' + jobId);
+      setAuthHeaders(xhr);
+
+      xhr.onload = function () {
+        if (xhr.status === 200) {
+          try {
+            var data = JSON.parse(xhr.responseText);
+            resolve(data.status);
+          } catch (e) {
+            resolve('unknown');
+          }
+        } else if (xhr.status === 404) {
+          resolve('not_found');
+        } else {
+          resolve('unknown');
+        }
+      };
+
+      xhr.onerror = function () {
+        resolve('unknown');
+      };
+
+      xhr.send();
+    });
+  }
 
   // Create a new extraction job
   function createJob() {
@@ -14,6 +56,7 @@
       var xhr = new XMLHttpRequest();
       xhr.open('POST', API_BASE + '/jobs');
       xhr.setRequestHeader('Content-Type', 'application/json');
+      setAuthHeaders(xhr);
 
       xhr.onload = function () {
         if (xhr.status === 201) {
@@ -48,6 +91,7 @@
 
       var xhr = new XMLHttpRequest();
       xhr.open('POST', API_BASE + '/jobs/' + jobId + '/upload');
+      setAuthHeaders(xhr);
 
       // Progress tracking
       xhr.upload.onprogress = function (e) {
@@ -74,20 +118,12 @@
           reject(new Error('No autorizado. Verifica la configuracion de la API key.'));
         } else if (xhr.status === 413) {
           reject(new Error('Archivo demasiado grande. El servidor rechaza archivos mayores al limite.'));
+        } else if (xhr.status === 409) {
+          reject(new Error('No se pueden agregar archivos a este trabajo. El trabajo ya esta finalizado.'));
         } else if (xhr.status === 415) {
-          try {
-            var errData = JSON.parse(xhr.responseText);
-            reject(new Error(errData.message || 'Tipo de archivo no valido'));
-          } catch (e) {
-            reject(new Error('Tipo de archivo no valido'));
-          }
+          reject(new Error('Tipo de archivo no valido'));
         } else if (xhr.status === 422 || xhr.status === 400) {
-          try {
-            var errData2 = JSON.parse(xhr.responseText);
-            reject(new Error(errData2.message || 'Error de validacion'));
-          } catch (e) {
-            reject(new Error('Error de validacion'));
-          }
+          reject(new Error('Error de validacion'));
         } else if (xhr.status >= 500) {
           reject(new Error('Error del servidor. Por favor intenta de nuevo mas tarde.'));
         } else {
@@ -111,12 +147,11 @@
 
   // Main upload flow
   async function startUpload() {
-    if (isUploading) return;
+    if (api.isUploading()) return;
 
     var files = api.getValidFiles();
     if (files.length === 0) return;
 
-    isUploading = true;
     api.hideError();
     api.setUploading(true);
     api.showProgress(true);
@@ -126,6 +161,24 @@
     try {
       // Get or create job
       var jobId = api.existingJobId;
+
+      // Check if existing job is still accepting files
+      if (jobId) {
+        var status = await checkJobStatus(jobId);
+        if (status === 'completed' || status === 'failed') {
+          api.setUploading(false);
+          api.showProgress(false);
+          api.showError('Este trabajo ya esta ' + status + '. Crea uno nuevo.');
+          return;
+        }
+        if (status === 'not_found') {
+          // Job doesn't exist anymore, create a new one
+          jobId = null;
+          api.existingJobId = null;
+          sessionStorage.removeItem('blueprintai_jobId');
+        }
+      }
+
       if (!jobId) {
         api.setProgress(0, 'Creando trabajo...');
         jobId = await createJob();
@@ -151,13 +204,11 @@
       // Redirect after 2 seconds
       setTimeout(function () {
         // Reset upload state in case redirect fails (e.g. results page not found)
-        isUploading = false;
         api.setUploading(false);
         window.location.href = '/results.html?jobId=' + encodeURIComponent(jobId);
       }, 2000);
 
     } catch (err) {
-      isUploading = false;
       api.setUploading(false);
       api.showProgress(false);
       api.showError(err.message || 'Error desconocido durante la carga');

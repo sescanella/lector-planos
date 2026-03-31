@@ -240,7 +240,7 @@
 <body>
   <main class="container">
     <!-- Success state -->
-    <div id="successCard" class="success-card">
+    <div id="successCard" class="success-card" role="status">
       <div class="success-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="20 6 9 17 4 12"/>
@@ -279,7 +279,7 @@
     </div>
 
     <!-- Error state: no jobId -->
-    <div id="errorCard" class="error-card">
+    <div id="errorCard" class="error-card" role="alert">
       <h1 class="error-title">No se encontro el trabajo</h1>
       <p class="error-text">No hay informacion de carga disponible. Regresa a la pagina de carga para subir archivos.</p>
       <a class="btn btn-primary" href="/">Ir a Cargar PDFs</a>
