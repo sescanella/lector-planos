@@ -601,29 +601,38 @@ After displaying the final output summary, immediately begin implementing tasks:
 
 Do NOT ask "Would you like me to start implementing the first task?" — just start.
 
-**Sync Task Statuses to BrainGrid (Fallback):**
+**Sync Task Statuses to BrainGrid (Mandatory):**
 
-After ALL tasks are marked `completed` in Claude Code (and before acceptance criteria verification), run a bulk sync to catch any statuses the PostToolUse hook missed (network errors, teammate shutdown races, sentinel issues):
+After ALL tasks are marked `completed` in Claude Code (and before acceptance criteria verification), run a mandatory sync. The PostToolUse hook may fail silently due to ID mismatches between Claude Code local task IDs and BrainGrid TASK-N IDs.
 
-1. **Fetch current BrainGrid task states**:
+**Why this is needed:** Claude Code assigns incrementing local IDs (e.g., 6, 7, 8...) that carry over across REQs in the same session. BrainGrid assigns its own TASK-N IDs per requirement (e.g., TASK-1, TASK-2...). The hook sync uses `external_id` to match them, but this can fail if the IDs diverge or the hook encounters errors.
+
+**Sync procedure:**
+
+1. **Fetch BrainGrid task list with markdown format** (to get short IDs and statuses):
 
    ```bash
-   braingrid task list -r REQ-{id} --format json
+   braingrid task list -r REQ-{id}
    ```
 
-2. **For each BrainGrid task with an `external_id`**:
-   - Look up the matching Claude Code task (by ID from `TaskList`)
-   - If the Claude Code task is `completed` but the BrainGrid task is NOT `COMPLETED`, sync it:
+2. **Parse the output** to find each task's BrainGrid short ID (e.g., TASK-1, TASK-2) and current status.
 
-     ```bash
-     braingrid task update TASK-X -r REQ-{id} --status COMPLETED
-     ```
+3. **For each BrainGrid task that is NOT `COMPLETED`**, update it directly using its BrainGrid short ID:
 
-3. **Report results**:
+   ```bash
+   braingrid task update TASK-{N} -r REQ-{id} --status COMPLETED
+   ```
+
+   Where `TASK-{N}` is the BrainGrid short ID from the list output, NOT the Claude Code local task ID.
+
+4. **Verify** by running `braingrid task list -r REQ-{id}` again and confirming all tasks show `COMPLETED` (✅).
+
+5. **Report results**:
    - If any tasks were synced: "🔄 Synced {n} task(s) to COMPLETED in BrainGrid"
-   - If all tasks were already synced: "✅ All tasks already synced to BrainGrid"
+   - If all were already synced: "✅ All tasks already synced to BrainGrid"
+   - If any failed to sync: "⚠️ Failed to sync {n} task(s) — list the TASK-IDs that failed"
 
-This is a safety net — most statuses should already be synced by the PostToolUse hook. Check `/tmp/braingrid-hook-debug.log` if any were missed to diagnose root cause.
+**Important:** Always use BrainGrid's TASK-N short IDs (from `braingrid task list`), never Claude Code's local task IDs, when calling `braingrid task update`.
 
 **Acceptance Criteria Verification Phase:**
 

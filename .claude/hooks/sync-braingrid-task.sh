@@ -54,26 +54,31 @@ if [ ! -s "$TEMP_JSON" ]; then
 	exit 0
 fi
 
+# Strip spinner characters from BrainGrid CLI output (they corrupt JSON)
+CLEAN_JSON=$(mktemp)
+sed 's/[^[:print:][:space:]]//g' "$TEMP_JSON" | sed 's/^[^[{]*//' > "$CLEAN_JSON"
+rm -f "$TEMP_JSON"
+
 # Validate JSON
-if ! jq empty "$TEMP_JSON" 2>/dev/null; then
+if ! jq empty "$CLEAN_JSON" 2>/dev/null; then
 	log_event "ERROR" "$HOOK" "task_list" "req=$req_id invalid_json"
-	rm -f "$TEMP_JSON"
+	rm -f "$CLEAN_JSON"
 	exit 0
 fi
 
 # Count tasks returned and find matching external_id
-task_count=$(jq 'length' "$TEMP_JSON" 2>/dev/null || echo 0)
+task_count=$(jq 'length' "$CLEAN_JSON" 2>/dev/null || echo 0)
 bg_task_id=$(jq -r --arg ext_id "$task_id" \
-	'.[] | select(.external_id == $ext_id) | .number // empty' "$TEMP_JSON" 2>/dev/null | head -1)
+	'.[] | select(.external_id == $ext_id) | .number // empty' "$CLEAN_JSON" 2>/dev/null | head -1)
 
 # Clean up temp file
-rm -f "$TEMP_JSON"
+rm -f "$CLEAN_JSON"
 
 log_event "INFO" "$HOOK" "task_list" "req=$req_id count=$task_count duration=$list_dur"
 
 # Exit if this task isn't linked to BrainGrid via external_id
 if [ -z "$bg_task_id" ]; then
-	log_event "INFO" "$HOOK" "skip" "no BrainGrid task with external_id=$task_id req=$req_id"
+	log_event "WARN" "$HOOK" "skip" "no BrainGrid task with external_id=$task_id req=$req_id (will rely on mandatory bulk sync)"
 	exit 0
 fi
 
