@@ -6,8 +6,12 @@ let queueConnection: IORedis | null = null;
 let workerConnection: IORedis | null = null;
 let queue: Queue | null = null;
 let worker: Worker | null = null;
+let aiExtractionQueue: Queue | null = null;
+let dlqQueue: Queue | null = null;
 
 const QUEUE_NAME = 'pdf-extraction';
+const AI_EXTRACTION_QUEUE = 'ai-extraction';
+const DLQ_QUEUE = 'pdf-extraction-dlq';
 const CONCURRENCY = 5;
 const JOB_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
@@ -73,11 +77,60 @@ export async function addExtractionJob(data: ExtractionJobData): Promise<string>
     attempts: 3,
     backoff: { type: 'exponential', delay: 1000 },
     removeOnComplete: { age: 7 * 24 * 3600 },
-    removeOnFail: { age: 7 * 24 * 3600 },
   });
 
   console.log(`Queued extraction job: ${job.id} (file: ${data.fileId})`);
   return job.id!;
+}
+
+export interface AiExtractionJobData {
+  spoolId: string;
+  imageUrl: string;
+  imageFormat: string;
+  pageNumber: number;
+  fileId: string;
+  jobId: string;
+}
+
+function getAiExtractionQueue(): Queue | null {
+  if (!env.REDIS_URL) return null;
+  if (!aiExtractionQueue) {
+    const conn = createConnection()!;
+    aiExtractionQueue = new Queue(AI_EXTRACTION_QUEUE, { connection: conn });
+  }
+  return aiExtractionQueue;
+}
+
+export function getDlqQueue(): Queue | null {
+  if (!env.REDIS_URL) return null;
+  if (!dlqQueue) {
+    const conn = createConnection()!;
+    dlqQueue = new Queue(DLQ_QUEUE, { connection: conn });
+  }
+  return dlqQueue;
+}
+
+export async function addAiExtractionJob(data: AiExtractionJobData): Promise<string> {
+  const q = getAiExtractionQueue();
+  if (!q) throw new Error('AI extraction queue not initialized — REDIS_URL not set');
+
+  const job = await q.add('extract-ai', data, {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 2000 },
+    removeOnComplete: { age: 7 * 24 * 3600 },
+  });
+
+  console.log(`Queued AI extraction job: ${job.id} (spool: ${data.spoolId})`);
+  return job.id!;
+}
+
+export async function addToDlq(data: ExtractionJobData): Promise<void> {
+  const q = getDlqQueue();
+  if (!q) return;
+  await q.add('failed-extraction', data, {
+    removeOnComplete: false,
+  });
+  console.log(`Moved to DLQ: file ${data.fileId}`);
 }
 
 export async function initQueue(): Promise<void> {
@@ -110,6 +163,14 @@ export async function shutdownQueue(): Promise<void> {
   if (queue) {
     await queue.close();
     queue = null;
+  }
+  if (aiExtractionQueue) {
+    await aiExtractionQueue.close();
+    aiExtractionQueue = null;
+  }
+  if (dlqQueue) {
+    await dlqQueue.close();
+    dlqQueue = null;
   }
   if (workerConnection) {
     await workerConnection.quit();

@@ -9,6 +9,7 @@ import { checkS3Connection } from './services/s3';
 import jobsRouter from './routes/jobs';
 import spoolsRouter from './routes/spools';
 import { authMiddleware } from './middleware/auth';
+import { createPdfExtractionProcessor } from './workers/pdf-extraction';
 
 const app = express();
 
@@ -85,11 +86,8 @@ async function start() {
   await initDatabase();
   await initQueue();
 
-  // Start extraction worker (placeholder processor — will be replaced by REQ-11)
-  startWorker(async (job) => {
-    console.log(`Processing extraction job: ${job.data.fileId} (${job.data.filename})`);
-    // Placeholder: actual extraction logic comes in REQ-10/REQ-11
-  });
+  // Start PDF extraction worker (REQ-10 pipeline)
+  startWorker(createPdfExtractionProcessor());
 
   const server = app.listen(env.PORT, () => {
     console.log(`BlueprintAI server listening on port ${env.PORT}`);
