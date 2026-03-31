@@ -23,6 +23,11 @@ export const env = {
   API_KEY: process.env.API_KEY || '',
   // CORS
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
+  // PDF Processing
+  PDF_DPI: parseInt(process.env.PDF_DPI || '200', 10),
+  PDF_TIMEOUT_MS: parseInt(process.env.PDF_TIMEOUT_MS || '30000', 10),
+  // Worker
+  WORKER_CONCURRENCY: parseInt(process.env.WORKER_CONCURRENCY || '5', 10),
 };
 
 // Fail fast in production if S3 is not configured

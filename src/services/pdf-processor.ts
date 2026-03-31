@@ -2,6 +2,7 @@ import { Poppler } from 'node-poppler';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
+import { env } from '../config/env';
 
 // Custom error types
 export class PdfCorruptedError extends Error {
@@ -38,8 +39,15 @@ export interface PdfProcessingResult {
 }
 
 const PDF_MAGIC_BYTES = '%PDF-';
-const DEFAULT_TIMEOUT_MS = 30_000;
-const DPI = 300;
+const DEFAULT_TIMEOUT_MS = env.PDF_TIMEOUT_MS;
+const DPI = env.PDF_DPI;
+const MAX_PAGE_BUFFER_SIZE = 50 * 1024 * 1024; // 50MB max per rendered page
+
+let popplerInstance: Poppler | null = null;
+function getPoppler(): Poppler {
+  if (!popplerInstance) popplerInstance = new Poppler();
+  return popplerInstance;
+}
 
 /**
  * Validates a buffer contains a valid PDF by checking magic bytes.
@@ -84,6 +92,9 @@ async function extractSinglePage(
   const outputFile = `${outputPrefix}.png`;
   const buffer = await fs.readFile(outputFile);
   await fs.unlink(outputFile);
+  if (buffer.length > MAX_PAGE_BUFFER_SIZE) {
+    throw new Error(`Rendered page exceeds ${MAX_PAGE_BUFFER_SIZE / (1024 * 1024)}MB limit (${(buffer.length / (1024 * 1024)).toFixed(1)}MB)`);
+  }
   return buffer;
 }
 
@@ -106,7 +117,7 @@ export async function processPdf(
     const pdfPath = path.join(tmpDir, 'input.pdf');
     await fs.writeFile(pdfPath, pdfBuffer);
 
-    const poppler = new Poppler();
+    const poppler = getPoppler();
 
     // Get page count
     let totalPages: number;
@@ -165,6 +176,8 @@ export async function processPdf(
     return { totalPages, pages, failedPages };
   } finally {
     // Clean up temp directory
-    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(err =>
+      console.warn(`Failed to clean temp directory ${tmpDir}:`, (err as Error).message)
+    );
   }
 }

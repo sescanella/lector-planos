@@ -12,7 +12,7 @@ let dlqQueue: Queue | null = null;
 const QUEUE_NAME = 'pdf-extraction';
 const AI_EXTRACTION_QUEUE = 'ai-extraction';
 const DLQ_QUEUE = 'pdf-extraction-dlq';
-const CONCURRENCY = 5;
+const CONCURRENCY = env.WORKER_CONCURRENCY;
 const JOB_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 function createConnection(): IORedis | null {
@@ -95,8 +95,8 @@ export interface AiExtractionJobData {
 function getAiExtractionQueue(): Queue | null {
   if (!env.REDIS_URL) return null;
   if (!aiExtractionQueue) {
-    const conn = createConnection()!;
-    aiExtractionQueue = new Queue(AI_EXTRACTION_QUEUE, { connection: conn });
+    if (!queueConnection) queueConnection = createConnection()!;
+    aiExtractionQueue = new Queue(AI_EXTRACTION_QUEUE, { connection: queueConnection });
   }
   return aiExtractionQueue;
 }
@@ -104,8 +104,8 @@ function getAiExtractionQueue(): Queue | null {
 export function getDlqQueue(): Queue | null {
   if (!env.REDIS_URL) return null;
   if (!dlqQueue) {
-    const conn = createConnection()!;
-    dlqQueue = new Queue(DLQ_QUEUE, { connection: conn });
+    if (!queueConnection) queueConnection = createConnection()!;
+    dlqQueue = new Queue(DLQ_QUEUE, { connection: queueConnection });
   }
   return dlqQueue;
 }
