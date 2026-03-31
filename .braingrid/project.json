@@ -1,0 +1,15 @@
+{
+  "organization_id": "70311ac8-abc1-446b-8954-e5a00066ca15",
+  "project_id": "4b717348-744e-419f-a114-3ad0aa07284d",
+  "project_short_id": "PROJ-1",
+  "project_name": "BlueprintAI",
+  "project_description": "crear un producto el cual lea planos en formato pdf con ia y que el output del sistema de un excel. el producto estara publicado en railway, debe tener un fontend donde el usuario suba los pdf que pueden ir de 1 hasta 200  \npdf diferentes. los mayores desafios son: 1) la ia no puede leer los planos de forma correcta, ya que no funciona el ocr y el vision no funciona muy bien pq los planos son de gran tamaño y la informacion de valor se ve muy pequeña, he    \nlogrado solucionar este problema antes sacandole ss al pdf en las secciones que contienn la informacion de valor del plano, pero esto no funciona bien siempre ya que los planos no estan estandarizados por lo que cada cliente final tiene  \nsu propio estilo de presentar los datos en el plano, por lo que si utilizamos coordenadas para los ss estas coordenadas siempre deben ser ajustadas dependiendo del plano. 2) lograr tener un frontend que permita la subida de documentos    \npdf, los planos se demen prosesar en menos de 60 segundos, procesar es desde que el usuario lanza el batch de planos hasta que el plano se encunetra listo para ser montado en el excel. 3) el producto debe estar preparado para aprender de \n sus errores y aprender de los planos adjuntados. Tengo un monton de planos para entrenar el sistema y hacer pruebas. En este momento necesitamos un mvp funcional. Tambien me gustaria tener una buena estrucutra de datos, poder almacenar toda la informacion que proceso el sistema.",
+  "repository": {
+    "id": "b25129a0-ac90-4aad-8623-8b9c2d699371",
+    "owner": "sescanella",
+    "name": "lector-planos",
+    "full_name": "sescanella/lector-planos",
+    "url": "https://github.com/sescanella/lector-planos.git"
+  },
+  "created_at": "2026-03-31T15:12:22.469Z"
+}
