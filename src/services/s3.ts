@@ -140,7 +140,8 @@ export async function uploadPageImage(
     }
   }
 
-  throw new Error('Unreachable');
+  // TypeScript can't infer that the loop always returns or throws
+  throw new Error(`S3 upload failed after ${maxAttempts} attempts: ${key}`);
 }
 
 export async function getPresignedUrl(s3Key: string): Promise<string> {

@@ -6,11 +6,13 @@ ALTER TABLE pdf_file
   CHECK (failed_pages >= 0);
 
 ALTER TABLE spool
-  ADD COLUMN IF NOT EXISTS image_url TEXT;
+  ADD COLUMN IF NOT EXISTS image_s3_key VARCHAR(1024);
 
 ALTER TABLE spool
   ADD COLUMN IF NOT EXISTS image_format VARCHAR(10)
   CHECK (image_format IN ('png', 'jpeg'));
+
+ALTER TABLE spool ALTER COLUMN spool_number DROP NOT NULL;
 
 ALTER TABLE spool
   ADD COLUMN IF NOT EXISTS extraction_status VARCHAR(20) NOT NULL DEFAULT 'pending'

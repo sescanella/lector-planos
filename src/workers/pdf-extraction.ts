@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import { Readable } from 'stream';
 import { getPool } from '../db';
-import { downloadPdf, uploadPageImage, getPresignedUrl } from '../services/s3';
+import { downloadPdf, uploadPageImage } from '../services/s3';
 import { processPdf, PdfCorruptedError, PdfEmptyError, PdfTimeoutError } from '../services/pdf-processor';
 import { addAiExtractionJob, addToDlq, ExtractionJobData } from '../services/queue';
 import type { ProcessorFn } from '../services/queue';
@@ -10,10 +10,15 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 async function streamToBuffer(stream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = [];
-  for await (const chunk of stream) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  try {
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  } catch (err) {
+    stream.destroy();
+    throw err;
   }
-  return Buffer.concat(chunks);
 }
 
 async function markPdfFileFailed(
@@ -88,48 +93,49 @@ export function createPdfExtractionProcessor(): ProcessorFn {
     }
 
     let succeededCount = 0;
-    let failedCount = result.failedPages.length;
-    const successfulSpools: { spoolId: string; imageUrl: string; pageNumber: number }[] = [];
+    let uploadFailedCount = 0;
+    const successfulSpools: { spoolId: string; imageS3Key: string; pageNumber: number }[] = [];
 
     // Process extracted pages — upload to S3 and create Spool records
     for (const page of result.pages) {
       try {
         const imageS3Key = await uploadPageImage(jobId, fileId, page.pageNumber, page.buffer, page.format);
-        const presignedUrl = await getPresignedUrl(imageS3Key);
 
         const { rows } = await pool.query(
-          `INSERT INTO spool (file_id, page_number, spool_number, image_url, image_format, extraction_status)
-           VALUES ($1, $2, $3, $4, $5, 'extracted')
+          `INSERT INTO spool (file_id, page_number, image_s3_key, image_format, extraction_status)
+           VALUES ($1, $2, $3, $4, 'extracted')
            RETURNING spool_id`,
-          [fileId, page.pageNumber, 'pending', presignedUrl, page.format],
+          [fileId, page.pageNumber, imageS3Key, page.format],
         );
 
         succeededCount++;
         successfulSpools.push({
           spoolId: rows[0].spool_id,
-          imageUrl: presignedUrl,
+          imageS3Key,
           pageNumber: page.pageNumber,
         });
       } catch (err) {
         console.error(`Failed to process page ${page.pageNumber} of file ${fileId}:`, (err as Error).message);
         // Create failed Spool record
         await pool.query(
-          `INSERT INTO spool (file_id, page_number, spool_number, extraction_status)
-           VALUES ($1, $2, 'pending', 'failed')`,
+          `INSERT INTO spool (file_id, page_number, extraction_status)
+           VALUES ($1, $2, 'failed')`,
           [fileId, page.pageNumber],
         ).catch(dbErr => console.error(`Failed to create failed spool record:`, (dbErr as Error).message));
-        failedCount++;
+        uploadFailedCount++;
       }
     }
 
     // Create failed Spool records for pages that failed during extraction
     for (const failedPageNum of result.failedPages) {
       await pool.query(
-        `INSERT INTO spool (file_id, page_number, spool_number, extraction_status)
-         VALUES ($1, $2, 'pending', 'failed')`,
+        `INSERT INTO spool (file_id, page_number, extraction_status)
+         VALUES ($1, $2, 'failed')`,
         [fileId, failedPageNum],
       ).catch(dbErr => console.error(`Failed to create failed spool record:`, (dbErr as Error).message));
     }
+
+    const totalFailedCount = result.failedPages.length + uploadFailedCount;
 
     // Update pdf_file with results
     const finalStatus = succeededCount > 0 ? 'completed' : 'failed';
@@ -143,33 +149,36 @@ export function createPdfExtractionProcessor(): ProcessorFn {
            error_message = $5,
            processing_completed_at = NOW()
        WHERE file_id = $1`,
-      [fileId, finalStatus, result.totalPages, failedCount, errorMsg],
+      [fileId, finalStatus, result.totalPages, totalFailedCount, errorMsg],
     );
 
     // If all failed, move to DLQ
     if (succeededCount === 0) {
-      await addToDlq(job.data).catch(err =>
-        console.error('Failed to add to DLQ:', (err as Error).message)
-      );
+      await addToDlq(job.data);
       return;
     }
 
     // Enqueue AI extraction jobs for successful pages
+    const failedEnqueues: string[] = [];
     for (const spool of successfulSpools) {
       try {
         await addAiExtractionJob({
           spoolId: spool.spoolId,
-          imageUrl: spool.imageUrl,
+          imageS3Key: spool.imageS3Key,
           imageFormat: 'png',
           pageNumber: spool.pageNumber,
           fileId,
           jobId,
         });
       } catch (err) {
-        console.error(`Failed to enqueue AI extraction for spool ${spool.spoolId}:`, (err as Error).message);
+        console.error(`Failed to enqueue AI extraction for spool ${spool.spoolId}:`, (err instanceof Error ? err.message : String(err)));
+        failedEnqueues.push(spool.spoolId);
       }
     }
+    if (failedEnqueues.length > 0) {
+      console.error(`ALERT: ${failedEnqueues.length} spools failed AI enqueue for file ${fileId}: [${failedEnqueues.join(', ')}]`);
+    }
 
-    console.log(`PDF processed: ${filename} — ${succeededCount} pages extracted, ${failedCount} failed`);
+    console.log(`PDF processed: ${filename} — ${succeededCount} pages extracted, ${totalFailedCount} failed`);
   };
 }

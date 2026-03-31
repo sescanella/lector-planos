@@ -85,7 +85,7 @@ export async function addExtractionJob(data: ExtractionJobData): Promise<string>
 
 export interface AiExtractionJobData {
   spoolId: string;
-  imageUrl: string;
+  imageS3Key: string;
   imageFormat: string;
   pageNumber: number;
   fileId: string;
