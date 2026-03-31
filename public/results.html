@@ -9,7 +9,7 @@
     :root {
       --primary-50: #FFF3E8;
       --primary-600: #FF5B00;
-      --primary-700: #E64A00;
+      --primary-700: #C43E00;
 
       --accent-50: #E3F2FD;
       --accent-600: #0A4C95;
@@ -20,7 +20,7 @@
       --neutral-50: #F8F9FA;
       --neutral-100: #F1F3F5;
       --neutral-200: #E9ECEF;
-      --neutral-600: #868E96;
+      --neutral-600: #6B7280;
       --neutral-700: #495057;
       --neutral-900: #212529;
     }
@@ -229,7 +229,7 @@
       margin-bottom: 2rem;
     }
 
-    @media (max-width: 600px) {
+    @media (max-width: 768px) {
       body { padding: 1rem; }
       .success-card, .error-card { padding: 2rem; }
       .success-icon { width: 3.5rem; height: 3.5rem; }
@@ -238,7 +238,7 @@
   </style>
 </head>
 <body>
-  <div class="container">
+  <main class="container">
     <!-- Success state -->
     <div id="successCard" class="success-card">
       <div class="success-icon" aria-hidden="true">
@@ -284,7 +284,7 @@
       <p class="error-text">No hay informacion de carga disponible. Regresa a la pagina de carga para subir archivos.</p>
       <a class="btn btn-primary" href="/">Ir a Cargar PDFs</a>
     </div>
-  </div>
+  </main>
 
   <script>
     (function () {

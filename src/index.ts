@@ -1,5 +1,6 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import multer from 'multer';
 import path from 'path';
 import { env } from './config/env';
 import { checkDatabaseConnection, getPool, initDatabase } from './db';
@@ -18,17 +19,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '100kb' }));
 
-// Serve static frontend files
+// Serve static frontend files (public/index.html serves at /)
+// Service info is available at GET /health
 app.use(express.static(path.join(__dirname, '..', 'public')));
-
-// Hello world
-app.get('/', (_req, res) => {
-  res.json({
-    service: 'BlueprintAI',
-    version: '0.1.0',
-    status: 'running',
-  });
-});
 
 // Health check
 app.get('/health', async (_req, res) => {
@@ -53,8 +46,29 @@ app.use('/api/v1', authMiddleware);
 app.use('/api/v1/jobs', jobsRouter);
 app.use('/api/v1/spools', spoolsRouter);
 
+// Multer error-handling middleware
+app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof multer.MulterError) {
+    switch (err.code) {
+      case 'LIMIT_FILE_SIZE':
+        res.status(413).json({ error: 'file_too_large', message: 'File exceeds maximum size of 50MB' });
+        return;
+      case 'LIMIT_FILE_COUNT':
+        res.status(400).json({ error: 'validation_error', message: 'Maximum 200 files per upload' });
+        return;
+      case 'LIMIT_UNEXPECTED_FILE':
+        res.status(400).json({ error: 'validation_error', message: 'Unexpected file field' });
+        return;
+      default:
+        res.status(400).json({ error: 'upload_error', message: err.message });
+        return;
+    }
+  }
+  next(err);
+});
+
 // 404 catch-all
-app.use((req, res) => {
+app.use((req: Request, res: Response) => {
   res.status(404).json({ error: 'not_found', message: `Route not found: ${req.method} ${req.path}` });
 });
 

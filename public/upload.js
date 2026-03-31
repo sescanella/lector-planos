@@ -8,20 +8,12 @@
   var API_BASE = '/api/v1';
   var isUploading = false;
 
-  // Get API key from meta tag or empty string
-  function getApiKey() {
-    var meta = document.querySelector('meta[name="api-key"]');
-    return meta ? meta.getAttribute('content') : '';
-  }
-
   // Create a new extraction job
   function createJob() {
     return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', API_BASE + '/jobs');
       xhr.setRequestHeader('Content-Type', 'application/json');
-      var apiKey = getApiKey();
-      if (apiKey) xhr.setRequestHeader('X-API-Key', apiKey);
 
       xhr.onload = function () {
         if (xhr.status === 201) {
@@ -31,6 +23,8 @@
           } catch (e) {
             reject(new Error('Error al procesar respuesta del servidor'));
           }
+        } else if (xhr.status === 401) {
+          reject(new Error('No autorizado. Verifica la configuracion de la API key.'));
         } else {
           reject(new Error('Error al crear trabajo: ' + xhr.status));
         }
@@ -54,8 +48,6 @@
 
       var xhr = new XMLHttpRequest();
       xhr.open('POST', API_BASE + '/jobs/' + jobId + '/upload');
-      var apiKey = getApiKey();
-      if (apiKey) xhr.setRequestHeader('X-API-Key', apiKey);
 
       // Progress tracking
       xhr.upload.onprogress = function (e) {
@@ -78,6 +70,8 @@
           } catch (e) {
             reject(new Error('Error al procesar respuesta del servidor'));
           }
+        } else if (xhr.status === 401) {
+          reject(new Error('No autorizado. Verifica la configuracion de la API key.'));
         } else if (xhr.status === 413) {
           reject(new Error('Archivo demasiado grande. El servidor rechaza archivos mayores al limite.'));
         } else if (xhr.status === 415) {
@@ -135,10 +129,10 @@
       if (!jobId) {
         api.setProgress(0, 'Creando trabajo...');
         jobId = await createJob();
+        // Persist jobId immediately so retries reuse the same job
+        api.existingJobId = jobId;
+        sessionStorage.setItem('blueprintai_jobId', jobId);
       }
-
-      // Store jobId
-      sessionStorage.setItem('blueprintai_jobId', jobId);
 
       // Upload files
       var result = await uploadFiles(jobId, files);
@@ -156,6 +150,9 @@
 
       // Redirect after 2 seconds
       setTimeout(function () {
+        // Reset upload state in case redirect fails (e.g. results page not found)
+        isUploading = false;
+        api.setUploading(false);
         window.location.href = '/results.html?jobId=' + encodeURIComponent(jobId);
       }, 2000);
 

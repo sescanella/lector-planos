@@ -28,7 +28,7 @@
       --neutral-200: #E9ECEF;
       --neutral-300: #DEE2E6;
       --neutral-500: #ADB5BD;
-      --neutral-600: #868E96;
+      --neutral-600: #6B7280;
       --neutral-700: #495057;
       --neutral-800: #343A40;
       --neutral-900: #212529;
@@ -379,6 +379,18 @@
       height: 1rem;
     }
 
+    /* File warning */
+    .file-warning {
+      background: #FFF8E1;
+      border: 1px solid #FFB300;
+      border-radius: 6px;
+      padding: 0.625rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.8125rem;
+      color: #E65100;
+      font-weight: 500;
+    }
+
     /* Actions bar */
     .actions-bar {
       display: none;
@@ -517,16 +529,16 @@
 <body>
   <div class="container">
     <header>
-      <div class="logo">BlueprintAI</div>
+      <h1 class="logo">BlueprintAI</h1>
       <div class="subtitle">Extractor de Datos de Planos</div>
     </header>
 
-    <div class="main-content">
+    <main class="main-content">
       <!-- Job banner for adding files to existing job -->
       <div id="jobBanner" class="job-banner" role="status"></div>
 
       <!-- Drop zone -->
-      <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="Zona de carga: arrastra PDFs aqui o haz clic para seleccionar archivos">
+      <div id="dropZone" class="drop-zone" tabindex="0" aria-label="Zona de carga de archivos PDF: arrastra archivos aqui o usa el boton para seleccionar">
         <div class="drop-icon">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -549,6 +561,9 @@
         </div>
         <ul id="fileItems" class="file-items" aria-label="Lista de archivos"></ul>
       </div>
+
+      <!-- File warning -->
+      <div id="fileWarning" class="file-warning" role="alert" style="display:none"></div>
 
       <!-- Actions bar -->
       <div id="actionsBar" class="actions-bar">
@@ -585,7 +600,7 @@
           <strong>Cantidad maxima:</strong> 200 archivos por lote
         </div>
       </div>
-    </div>
+    </main>
   </div>
 
   <script src="app.js"></script>

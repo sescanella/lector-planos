@@ -8,7 +8,7 @@ import { isValidUUID } from '../utils/validation';
 
 const router = Router();
 
-const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB — single planos ~1MB, multi-page documents up to ~30MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB — max file size per REQ-9 spec
 const MAX_FILES_PER_JOB = 200;
 
 const upload = multer({

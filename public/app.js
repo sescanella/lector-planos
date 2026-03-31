@@ -10,6 +10,7 @@
   // State
   let selectedFiles = []; // Array of { id, file, valid, error }
   let fileIdCounter = 0;
+  let uploadInProgress = false;
 
   // DOM elements
   const dropZone = document.getElementById('dropZone');
@@ -30,6 +31,7 @@
   const errorText = document.getElementById('errorText');
   const retryBtn = document.getElementById('retryBtn');
   const jobBanner = document.getElementById('jobBanner');
+  const fileWarning = document.getElementById('fileWarning');
   const announcer = document.getElementById('announcer');
 
   // --- Announce to screen readers ---
@@ -56,6 +58,7 @@
   function addFiles(fileArray) {
     const remaining = MAX_FILES - selectedFiles.length;
     let countLimitHit = false;
+    let skippedCount = 0;
 
     for (let i = 0; i < fileArray.length; i++) {
       if (selectedFiles.length >= MAX_FILES) {
@@ -68,7 +71,10 @@
       const isDuplicate = selectedFiles.some(
         (sf) => sf.file.name === file.name && sf.file.size === file.size
       );
-      if (isDuplicate) continue;
+      if (isDuplicate) {
+        skippedCount++;
+        continue;
+      }
 
       const validation = validateFile(file);
       selectedFiles.push({
@@ -81,9 +87,15 @@
 
     if (countLimitHit) {
       announce('Maximo 200 archivos alcanzado');
+      fileWarning.textContent = 'Maximo 200 archivos alcanzado. Elimina archivos para agregar mas.';
+      fileWarning.style.display = 'block';
     } else {
-      const added = Math.min(fileArray.length, remaining);
+      const added = Math.min(fileArray.length - skippedCount, remaining);
       announce(added + ' archivo' + (added !== 1 ? 's' : '') + ' agregado' + (added !== 1 ? 's' : ''));
+    }
+
+    if (skippedCount > 0) {
+      announce(skippedCount + ' archivo' + (skippedCount !== 1 ? 's' : '') + ' duplicado' + (skippedCount !== 1 ? 's' : '') + ' omitido' + (skippedCount !== 1 ? 's' : ''));
     }
 
     renderFileList();
@@ -92,21 +104,34 @@
 
   // --- Remove file ---
   function removeFile(id) {
+    if (uploadInProgress) return;
     const file = selectedFiles.find((f) => f.id === id);
+    const removedIndex = selectedFiles.findIndex((f) => f.id === id);
     selectedFiles = selectedFiles.filter((f) => f.id !== id);
     if (file) {
       announce(file.file.name + ' eliminado');
     }
     renderFileList();
     updateUI();
+    // Focus management: move focus to next remove button, or previous, or drop zone
+    if (selectedFiles.length > 0) {
+      var focusIndex = Math.min(removedIndex, selectedFiles.length - 1);
+      var targetId = selectedFiles[focusIndex].id;
+      var targetBtn = fileItems.querySelector('[data-remove-id="' + targetId + '"]');
+      if (targetBtn) targetBtn.focus();
+    } else {
+      dropZone.focus();
+    }
   }
 
   // --- Clear all ---
   function clearAll() {
+    if (uploadInProgress) return;
     selectedFiles = [];
     announce('Todos los archivos eliminados');
     renderFileList();
     updateUI();
+    dropZone.focus();
   }
 
   // --- Format file size ---
@@ -160,6 +185,9 @@
     // File list visibility
     fileList.classList.toggle('visible', hasFiles);
     actionsBar.classList.toggle('visible', hasFiles);
+
+    // File warning visibility
+    fileWarning.style.display = selectedFiles.length >= MAX_FILES ? 'block' : 'none';
 
     // File count badge
     fileCountBadge.textContent = selectedFiles.length + ' archivo' + (selectedFiles.length !== 1 ? 's' : '') + ' seleccionado' + (selectedFiles.length !== 1 ? 's' : '');
@@ -289,7 +317,21 @@
       errorBanner.classList.add('visible');
     },
     hideError: function () { errorBanner.classList.remove('visible'); },
-    setUploading: function (uploading) { dropZone.classList.toggle('uploading', uploading); },
+    setUploading: function (uploading) {
+      uploadInProgress = uploading;
+      dropZone.classList.toggle('uploading', uploading);
+      dropZone.setAttribute('aria-disabled', uploading ? 'true' : 'false');
+      var mainContent = document.querySelector('.main-content');
+      if (mainContent) {
+        mainContent.setAttribute('aria-busy', uploading ? 'true' : 'false');
+      }
+      clearAllBtn.disabled = uploading;
+      // Disable/enable all remove buttons
+      var removeBtns = fileItems.querySelectorAll('.btn-remove');
+      for (var i = 0; i < removeBtns.length; i++) {
+        removeBtns[i].disabled = uploading;
+      }
+    },
     announce: announce,
     setJobBanner: function (text) {
       jobBanner.textContent = text;
