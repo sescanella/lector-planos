@@ -22,7 +22,7 @@ This is a scalable rewrite of the prototype at `../PDF-Listado-Materiales/`, whi
 
 | Layer | Technology |
 |-------|-----------|
-| **Runtime** | Node.js 18+ |
+| **Runtime** | Node.js 22+ (LTS) |
 | **Framework** | Express.js |
 | **Language** | TypeScript |
 | **Database** | PostgreSQL (Railway-managed) |
