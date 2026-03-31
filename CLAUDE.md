@@ -18,29 +18,55 @@ This is a scalable rewrite of the prototype at `../PDF-Listado-Materiales/`, whi
   - **Cortes** (cuts): N CORTE, DIAM., LARGO, EXTREMO 1, EXTREMO 2
   - **Cajetin** (title block): OT, OF, tag spool, diameter, client, end client, line
 
-## Architecture Goals (MVP)
+## Tech Stack
 
-- **Backend**: Python API (FastAPI) handling PDF upload, processing pipeline, and Excel generation
-- **Frontend**: Web UI for batch PDF upload with processing status
-- **Processing pipeline**: PDF -> region detection/cropping -> Vision AI extraction -> validation -> JSON -> Excel
-- **Data storage**: Persist all extracted data (not just final Excel) for learning/improvement
-- **Deployment**: Railway (containerized)
+| Layer | Technology |
+|-------|-----------|
+| **Runtime** | Node.js 18+ |
+| **Framework** | Express.js |
+| **Language** | TypeScript |
+| **Database** | PostgreSQL (Railway-managed) |
+| **File Storage** | AWS S3 (`uploads/{job_id}/{file_id}.pdf`) |
+| **Job Queue** | BullMQ + Redis (5 parallel workers) |
+| **Deployment** | Railway |
+| **Dev Tools** | nodemon, ts-node |
+
+## Architecture
+
+- **Backend**: Express API handling PDF upload, job queue orchestration, and Excel generation
+- **Frontend**: Web UI for batch PDF upload (1-200 files) with processing status
+- **Processing pipeline**: PDF upload → S3 storage → BullMQ job → Vision AI extraction → validation → DB persist → Excel export
+- **Data storage**: PostgreSQL for all extracted data (spools, materials, unions, cuts, metadata, corrections)
+- **Notifications**: Webhook on job completion/failure
 - **Target**: < 60 seconds from batch upload to Excel-ready output
+
+## Data Model (key entities)
+
+- **ExtractionJob** → PDFFile (1:many) → Spool (1:many) → Material, Union, Cut, SpoolMetadata
+- **Correction**: User feedback linked to Spool for learning from errors
+- All entities include `confidence_score` (0-1) from AI extraction
+
+## API Routes
+
+- `POST /api/v1/jobs` — Create extraction job
+- `POST /api/v1/jobs/:jobId/upload` — Upload PDFs (1-200, max 50MB each)
+- `GET /api/v1/jobs/:jobId` — Job status + file list
+- `GET /api/v1/spools/:spoolId` — Extracted spool data
+- `POST /api/v1/spools/:spoolId/corrections` — Submit correction
+- `GET /` — Hello world (service name, version)
+- `GET /health` — Health check (server + DB status)
 
 ## Inherited from Prototype
 
-The data models (Pydantic schemas) and Excel generation logic from `../PDF-Listado-Materiales/src/` are reusable:
-- `schemas.py`: MaterialRow, SoldaduraRow, CorteRow, CajetinData, SpoolRecord
-- `excel.py`: openpyxl-based Excel writer with 3 sheets (Materiales, Soldaduras, Cortes)
-- `crop.py`: PyMuPDF region cropping engine (needs to be made adaptive)
-- `regions.py`: Fixed %-based coordinates (need to become configurable per client/format)
+The domain knowledge and extraction logic from `../PDF-Listado-Materiales/src/` informed the BrainGrid requirements:
+- Region cropping strategy (now needs to become adaptive per client format)
+- Excel output structure: 3 sheets (Materiales, Soldaduras, Cortes)
+- Data fields per region (ITEM, DIAM., CODIGO, etc.)
 
 ## Key Technical Decisions (Pending)
 
 - Vision AI provider for table extraction (Claude API, OpenAI, Google)
 - Region detection strategy: fixed coordinates vs. adaptive detection vs. user-configurable templates
-- Database choice for persisting extracted data and learning from corrections
-- Queue system for batch processing within 60s constraint
 
 
 <!-- BEGIN BRAINGRID INTEGRATION -->
