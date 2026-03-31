@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlueprintAI - Carga Completada</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-50: #FFF3E8;
+      --primary-600: #FF5B00;
+      --primary-700: #E64A00;
+
+      --accent-50: #E3F2FD;
+      --accent-600: #0A4C95;
+
+      --success-50: #E8F5E9;
+      --success-600: #2E7D32;
+
+      --neutral-50: #F8F9FA;
+      --neutral-100: #F1F3F5;
+      --neutral-200: #E9ECEF;
+      --neutral-600: #868E96;
+      --neutral-700: #495057;
+      --neutral-900: #212529;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #FFF3E8 0%, #F8F9FA 100%);
+      color: var(--neutral-900);
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+    }
+
+    .success-card {
+      background: white;
+      border-radius: 12px;
+      padding: 3rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+      text-align: center;
+    }
+
+    .success-icon {
+      width: 4rem;
+      height: 4rem;
+      margin: 0 auto 1.5rem;
+      background: var(--success-50);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: scale-in 0.5s ease-out;
+    }
+
+    .success-icon svg {
+      width: 2rem;
+      height: 2rem;
+      color: var(--success-600);
+    }
+
+    @keyframes scale-in {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .success-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--neutral-900);
+      margin-bottom: 0.5rem;
+    }
+
+    .success-text {
+      font-size: 0.875rem;
+      color: var(--neutral-600);
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+
+    .summary-box {
+      background: var(--neutral-50);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      text-align: left;
+    }
+
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--neutral-200);
+      font-size: 0.875rem;
+    }
+
+    .summary-item:last-child { border-bottom: none; }
+
+    .summary-label {
+      color: var(--neutral-600);
+      font-weight: 500;
+    }
+
+    .summary-value {
+      color: var(--neutral-900);
+      font-weight: 600;
+    }
+
+    .job-id-box {
+      background: var(--accent-50);
+      border: 1px solid var(--accent-600);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .job-id-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent-600);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .job-id-value {
+      font-family: 'Courier New', monospace;
+      font-size: 0.875rem;
+      color: var(--neutral-900);
+      word-break: break-all;
+      font-weight: 500;
+    }
+
+    .actions {
+      display: flex;
+      gap: 1rem;
+      flex-direction: column;
+    }
+
+    .btn {
+      padding: 0.875rem 1.5rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      letter-spacing: 0.02em;
+      min-height: 44px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn:focus-visible {
+      outline: 3px solid var(--primary-600);
+      outline-offset: 2px;
+    }
+
+    .btn-primary {
+      background: var(--primary-600);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-700);
+    }
+
+    .btn-secondary {
+      background: var(--neutral-100);
+      color: var(--neutral-900);
+      border: 1px solid var(--neutral-200);
+    }
+
+    .btn-secondary:hover {
+      background: var(--neutral-200);
+    }
+
+    .redirect-notice {
+      font-size: 0.75rem;
+      color: var(--neutral-600);
+      margin-top: 1rem;
+      animation: fade-in 1s ease-in;
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Error state */
+    .error-card {
+      display: none;
+      background: white;
+      border-radius: 12px;
+      padding: 3rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+      text-align: center;
+    }
+
+    .error-card.visible { display: block; }
+    .success-card.hidden { display: none; }
+
+    .error-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--neutral-900);
+      margin-bottom: 0.5rem;
+    }
+
+    .error-text {
+      font-size: 0.875rem;
+      color: var(--neutral-600);
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 600px) {
+      body { padding: 1rem; }
+      .success-card, .error-card { padding: 2rem; }
+      .success-icon { width: 3.5rem; height: 3.5rem; }
+      .success-title { font-size: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Success state -->
+    <div id="successCard" class="success-card">
+      <div class="success-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+
+      <h1 class="success-title">Carga Completada!</h1>
+      <p class="success-text" id="successText">
+        Tus archivos han sido cargados exitosamente. El procesamiento comenzara inmediatamente.
+      </p>
+
+      <div class="summary-box">
+        <div class="summary-item">
+          <span class="summary-label">Archivos cargados:</span>
+          <span class="summary-value" id="fileCountValue">-</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Tamano total:</span>
+          <span class="summary-value" id="totalSizeValue">-</span>
+        </div>
+      </div>
+
+      <div class="job-id-box">
+        <div class="job-id-label">ID de Trabajo</div>
+        <div class="job-id-value" id="jobIdValue">-</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="viewResultsBtn" type="button">Ver Resultados</button>
+        <a class="btn btn-secondary" id="addMoreBtn" href="/">Cargar Mas Archivos</a>
+      </div>
+
+      <div class="redirect-notice" id="redirectNotice" aria-live="polite" style="display:none;">
+        Procesamiento en curso...
+      </div>
+    </div>
+
+    <!-- Error state: no jobId -->
+    <div id="errorCard" class="error-card">
+      <h1 class="error-title">No se encontro el trabajo</h1>
+      <p class="error-text">No hay informacion de carga disponible. Regresa a la pagina de carga para subir archivos.</p>
+      <a class="btn btn-primary" href="/">Ir a Cargar PDFs</a>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var params = new URLSearchParams(window.location.search);
+      var jobId = params.get('jobId') || sessionStorage.getItem('blueprintai_jobId');
+
+      if (!jobId) {
+        document.getElementById('successCard').classList.add('hidden');
+        document.getElementById('errorCard').classList.add('visible');
+        return;
+      }
+
+      // Read upload summary from sessionStorage
+      var summary = null;
+      try {
+        summary = JSON.parse(sessionStorage.getItem('blueprintai_uploadSummary'));
+      } catch (e) { /* ignore */ }
+
+      // Populate job ID
+      document.getElementById('jobIdValue').textContent = jobId;
+
+      // Populate summary if available
+      if (summary) {
+        document.getElementById('fileCountValue').textContent = summary.fileCount;
+        document.getElementById('totalSizeValue').textContent = formatSize(summary.totalSize);
+        document.getElementById('successText').textContent =
+          'Tus ' + summary.fileCount + ' archivos han sido cargados exitosamente. El procesamiento comenzara inmediatamente.';
+      }
+
+      // Add more files link with jobId
+      document.getElementById('addMoreBtn').href = '/?jobId=' + encodeURIComponent(jobId);
+
+      // View results button (placeholder — job status page will come later)
+      document.getElementById('viewResultsBtn').addEventListener('click', function () {
+        // For now, show processing notice
+        document.getElementById('redirectNotice').style.display = 'block';
+        document.getElementById('redirectNotice').textContent = 'El visor de resultados estara disponible proximamente. ID de trabajo: ' + jobId;
+      });
+
+      function formatSize(bytes) {
+        if (!bytes) return '-';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      }
+    })();
+  </script>
+</body>
+</html>
