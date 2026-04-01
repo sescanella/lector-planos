@@ -225,7 +225,7 @@ router.get('/:jobId', async (req: Request, res: Response) => {
     }
 
     const { rows: fileRows } = await pool.query(
-      'SELECT file_id, original_filename AS filename, status, page_count FROM pdf_file WHERE job_id = $1 ORDER BY uploaded_at',
+      'SELECT file_id, original_filename AS filename, status, page_count, failed_pages FROM pdf_file WHERE job_id = $1 ORDER BY uploaded_at',
       [jobId]
     );
 
