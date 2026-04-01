@@ -20,3 +20,10 @@ ALTER TABLE spool
 
 CREATE INDEX IF NOT EXISTS idx_spool_extraction_status
   ON spool(file_id, extraction_status);
+
+ALTER TABLE spool
+  ADD COLUMN IF NOT EXISTS ai_enqueue_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+  CHECK (ai_enqueue_status IN ('pending', 'queued', 'failed'));
+
+CREATE INDEX IF NOT EXISTS idx_spool_ai_enqueue_failed
+  ON spool(ai_enqueue_status) WHERE ai_enqueue_status = 'failed';

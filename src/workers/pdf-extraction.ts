@@ -170,9 +170,17 @@ export function createPdfExtractionProcessor(): ProcessorFn {
           fileId,
           jobId,
         });
+        await pool.query(
+          `UPDATE spool SET ai_enqueue_status = 'queued' WHERE spool_id = $1`,
+          [spool.spoolId],
+        );
       } catch (err) {
         console.error(`Failed to enqueue AI extraction for spool ${spool.spoolId}:`, (err instanceof Error ? err.message : String(err)));
         failedEnqueues.push(spool.spoolId);
+        await pool.query(
+          `UPDATE spool SET ai_enqueue_status = 'failed' WHERE spool_id = $1`,
+          [spool.spoolId],
+        ).catch(dbErr => console.error(`Failed to update ai_enqueue_status:`, (dbErr instanceof Error ? dbErr.message : String(dbErr))));
       }
     }
     if (failedEnqueues.length > 0) {
