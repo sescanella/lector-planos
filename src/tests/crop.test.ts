@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { bboxToPixels, FIXED_CROPS, type CropRegion } from '../services/crop';
 
 // Standard A3 landscape page dimensions in points
