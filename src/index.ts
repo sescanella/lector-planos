@@ -10,6 +10,7 @@ import jobsRouter from './routes/jobs';
 import spoolsRouter from './routes/spools';
 import { authMiddleware } from './middleware/auth';
 import { createPdfExtractionProcessor } from './workers/pdf-extraction';
+import { createAiExtractionProcessor } from './workers/ai-extraction';
 
 const app = express();
 
@@ -90,8 +91,7 @@ async function start() {
   startWorker(createPdfExtractionProcessor());
 
   // Start AI extraction worker (REQ-11 pipeline)
-  // Processor will be provided by src/workers/ai-extraction.ts (task 6)
-  // startAiWorker(createAiExtractionProcessor());
+  startAiWorker(createAiExtractionProcessor());
 
   // Stale job recovery: reset spools stuck in 'processing' for >10 min
   const pool = getPool();
