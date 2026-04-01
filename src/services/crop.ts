@@ -20,6 +20,7 @@ export interface CropRegion {
 export interface PageDimensions {
   widthPts: number;
   heightPts: number;
+  rotation: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +49,10 @@ export const FIXED_CROPS: readonly CropRegion[] = [
   { id: 'cajetin_titleblk', leftPct: 50, topPct: 80, rightPct: 100, bottomPct: 100, dpi: 800 },
 ] as const;
 
-const MAX_PIXEL_DIM = 8000;
+// Claude Vision API limits: 8000px max dimension, 5MB max base64 per image.
+// Use 7000px to leave margin — actual rendered PNG size depends on content.
+const MAX_PIXEL_DIM = 7000;
+const MAX_IMAGE_BYTES = 4.5 * 1024 * 1024; // 4.5 MB (leaves margin for 5 MB base64 limit)
 const MAX_CROP_BUFFER_SIZE = 200 * 1024 * 1024; // 200 MB
 const CROP_TIMEOUT_MS = env.PDF_TIMEOUT_MS; // reuse existing env var
 
@@ -92,27 +96,34 @@ export async function getPageDimensions(pdfPath: string): Promise<PageDimensions
   const poppler = getPoppler();
   const info = await poppler.pdfInfo(pdfPath, { printAsJson: true }) as Record<string, string>;
 
-  // pdfInfo returns "Page size" with format like "595.276 x 841.89 pts (A4)"
-  const pageSizeStr = info['page_size'] || info['Page size'] || '';
+  // pdfInfo returns page size with format like "595.276 x 841.89 pts (A4)"
+  // Key varies by node-poppler version: 'pageSize' (JSON mode), 'page_size', or 'Page size'
+  const pageSizeStr = info['pageSize'] || info['page_size'] || info['Page size'] || '';
   const match = pageSizeStr.match(/([\d.]+)\s*x\s*([\d.]+)/);
 
   if (!match) {
     throw new CropDimensionError(`Could not parse page dimensions from pdfInfo: "${pageSizeStr}"`);
   }
 
-  const widthPts = parseFloat(match[1]);
-  const heightPts = parseFloat(match[2]);
+  let widthPts = parseFloat(match[1]);
+  let heightPts = parseFloat(match[2]);
 
   if (widthPts <= 0 || heightPts <= 0) {
     throw new CropDimensionError(`Invalid page dimensions: ${widthPts} x ${heightPts} pts`);
   }
 
-  // Warn if portrait orientation (unusual for engineering drawings)
-  if (heightPts > widthPts * 1.1) {
-    console.warn(`Page appears to be portrait (${widthPts} x ${heightPts} pts) — engineering drawings are typically landscape`);
+  // Parse page rotation (90, 180, 270) — poppler renders the rotated view,
+  // so for crop coordinates we need the effective (visual) dimensions.
+  const rotStr = info['pageRot'] || info['page_rot'] || info['Page rot'] || '0';
+  const rotation = parseInt(rotStr, 10) || 0;
+
+  // When rotation is 90 or 270, the visual dimensions are swapped
+  if (rotation === 90 || rotation === 270) {
+    console.log(`Page rotation ${rotation}° detected — swapping dimensions for crop (${widthPts} x ${heightPts} → ${heightPts} x ${widthPts})`);
+    [widthPts, heightPts] = [heightPts, widthPts];
   }
 
-  return { widthPts, heightPts };
+  return { widthPts, heightPts, rotation };
 }
 
 // ---------------------------------------------------------------------------
@@ -215,9 +226,31 @@ export async function cropRegionsFromPdf(
           cropHeight: bbox.height,
         });
 
-        const outputFile = `${outputPrefix}.png`;
-        const buffer = await fs.readFile(outputFile);
+        let outputFile = `${outputPrefix}.png`;
+        let buffer = await fs.readFile(outputFile);
         await fs.unlink(outputFile);
+
+        // If image exceeds Claude's 5MB base64 limit, re-render at lower DPI
+        if (buffer.length > MAX_IMAGE_BYTES) {
+          const reducedDpi = Math.floor(bbox.effectiveDpi * (MAX_IMAGE_BYTES / buffer.length) * 0.9);
+          console.warn(`Crop "${region.id}" too large (${(buffer.length / (1024 * 1024)).toFixed(1)}MB), re-rendering at ${reducedDpi} DPI`);
+          const reducedBbox = bboxToPixels({ ...region, dpi: reducedDpi }, pageDims.widthPts, pageDims.heightPts);
+          const retryPrefix = path.join(tmpDir, `${region.id}_retry`);
+          await poppler.pdfToPpm(pdfPath, retryPrefix, {
+            pngFile: true,
+            resolutionXYAxis: reducedBbox.effectiveDpi,
+            firstPageToConvert: pageNumber,
+            lastPageToConvert: pageNumber,
+            singleFile: true,
+            cropXAxis: reducedBbox.x,
+            cropYAxis: reducedBbox.y,
+            cropWidth: reducedBbox.width,
+            cropHeight: reducedBbox.height,
+          });
+          outputFile = `${retryPrefix}.png`;
+          buffer = await fs.readFile(outputFile);
+          await fs.unlink(outputFile);
+        }
 
         if (buffer.length > MAX_CROP_BUFFER_SIZE) {
           throw new Error(
