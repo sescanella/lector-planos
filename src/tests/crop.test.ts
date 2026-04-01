@@ -7,34 +7,37 @@ const A3_HEIGHT_PTS = 841.89;
 describe('bboxToPixels', () => {
   it('converts right_upper region to correct pixel coordinates', () => {
     const region = FIXED_CROPS[0]; // right_upper: 45-100% x, 0-40% y, 600 DPI
+    const scale = 600 / 72;
     const result = bboxToPixels(region, A3_WIDTH_PTS, A3_HEIGHT_PTS);
 
-    expect(result.x).toBe(Math.round(0.45 * A3_WIDTH_PTS));
+    expect(result.x).toBe(Math.round(0.45 * A3_WIDTH_PTS * scale));
     expect(result.y).toBe(0);
-    expect(result.width).toBe(Math.round(0.55 * A3_WIDTH_PTS));
-    expect(result.height).toBe(Math.round(0.40 * A3_HEIGHT_PTS));
+    expect(result.width).toBe(Math.round(0.55 * A3_WIDTH_PTS * scale));
+    expect(result.height).toBe(Math.round(0.40 * A3_HEIGHT_PTS * scale));
     expect(result.effectiveDpi).toBe(600);
   });
 
   it('converts cajetin region to correct pixel coordinates', () => {
     const region = FIXED_CROPS[3]; // cajetin: 50-100% x, 80-100% y, 800 DPI
+    const scale = 800 / 72;
     const result = bboxToPixels(region, A3_WIDTH_PTS, A3_HEIGHT_PTS);
 
-    expect(result.x).toBe(Math.round(0.50 * A3_WIDTH_PTS));
-    expect(result.y).toBe(Math.round(0.80 * A3_HEIGHT_PTS));
-    expect(result.width).toBe(Math.round(0.50 * A3_WIDTH_PTS));
-    expect(result.height).toBe(Math.round(0.20 * A3_HEIGHT_PTS));
+    expect(result.x).toBe(Math.round(0.50 * A3_WIDTH_PTS * scale));
+    expect(result.y).toBe(Math.round(0.80 * A3_HEIGHT_PTS * scale));
+    expect(result.width).toBe(Math.round(0.50 * A3_WIDTH_PTS * scale));
+    expect(result.height).toBe(Math.round(0.20 * A3_HEIGHT_PTS * scale));
     expect(result.effectiveDpi).toBe(800);
   });
 
   it('converts right_center overlap region correctly', () => {
-    const region = FIXED_CROPS[1]; // 45-100% x, 20-60% y
+    const region = FIXED_CROPS[1]; // 45-100% x, 20-60% y, 600 DPI
+    const scale = 600 / 72;
     const result = bboxToPixels(region, A3_WIDTH_PTS, A3_HEIGHT_PTS);
 
-    expect(result.x).toBe(Math.round(0.45 * A3_WIDTH_PTS));
-    expect(result.y).toBe(Math.round(0.20 * A3_HEIGHT_PTS));
-    expect(result.width).toBe(Math.round(0.55 * A3_WIDTH_PTS));
-    expect(result.height).toBe(Math.round(0.40 * A3_HEIGHT_PTS));
+    expect(result.x).toBe(Math.round(0.45 * A3_WIDTH_PTS * scale));
+    expect(result.y).toBe(Math.round(0.20 * A3_HEIGHT_PTS * scale));
+    expect(result.width).toBe(Math.round(0.55 * A3_WIDTH_PTS * scale));
+    expect(result.height).toBe(Math.round(0.40 * A3_HEIGHT_PTS * scale));
   });
 
   it('produces no negative coordinates for all fixed crops', () => {
@@ -88,7 +91,7 @@ describe('bboxToPixels', () => {
     }
   });
 
-  it('preserves crop points (not pixels) for poppler coordinates', () => {
+  it('computes pixel coordinates using (pct/100) * pts * (dpi/72) formula', () => {
     const region: CropRegion = {
       id: 'test_coords',
       leftPct: 25,
@@ -98,12 +101,13 @@ describe('bboxToPixels', () => {
       dpi: 400,
     };
     const result = bboxToPixels(region, 1000, 800);
+    const scale = 400 / 72;
 
-    // Coordinates should be in points for poppler
-    expect(result.x).toBe(250);  // 25% of 1000
-    expect(result.y).toBe(240);  // 30% of 800
-    expect(result.width).toBe(500);  // 50% of 1000
-    expect(result.height).toBe(400); // 50% of 800
+    // Coordinates must be in pixels at target DPI
+    expect(result.x).toBe(Math.round(250 * scale));   // 25% of 1000 * scale
+    expect(result.y).toBe(Math.round(240 * scale));    // 30% of 800 * scale
+    expect(result.width).toBe(Math.round(500 * scale));  // 50% of 1000 * scale
+    expect(result.height).toBe(Math.round(400 * scale)); // 50% of 800 * scale
   });
 });
 

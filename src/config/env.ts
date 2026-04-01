@@ -54,7 +54,8 @@ if (env.DB_POOL_MAX < 1 || env.DB_POOL_MAX > 100) {
 }
 
 // AI Vision extraction validation
-if (!env.ANTHROPIC_API_KEY) {
+// Fail-fast in all non-test environments; tests may not need a real key
+if (!env.ANTHROPIC_API_KEY && env.NODE_ENV !== 'test') {
   throw new Error('ANTHROPIC_API_KEY is required');
 }
 if (env.VISION_MAX_TOKENS < 1024 || env.VISION_MAX_TOKENS > 16384) {

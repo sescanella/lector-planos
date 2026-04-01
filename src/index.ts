@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import { env } from './config/env';
 import { checkDatabaseConnection, getPool, initDatabase } from './db';
-import { initQueue, shutdownQueue, startWorker, startAiWorker, checkRedisConnection } from './services/queue';
+import { initQueue, shutdownQueue, startWorker, startAiWorker, checkRedisConnection, addAiExtractionJob } from './services/queue';
 import { checkS3Connection } from './services/s3';
 import jobsRouter from './routes/jobs';
 import spoolsRouter from './routes/spools';
@@ -93,17 +93,34 @@ async function start() {
   // Start AI extraction worker (REQ-11 pipeline)
   startAiWorker(createAiExtractionProcessor());
 
-  // Stale job recovery: reset spools stuck in 'processing' for >10 min
+  // Stale job recovery: reset spools stuck in 'processing' for >10 min and re-enqueue
   const pool = getPool();
   if (pool) {
-    const { rowCount } = await pool.query(
+    const { rows: staleSpools } = await pool.query(
       `UPDATE spool
        SET vision_status = 'pending', vision_processing_started_at = NULL
        WHERE vision_status = 'processing'
-         AND vision_processing_started_at < NOW() - INTERVAL '10 minutes'`,
+         AND vision_processing_started_at < NOW() - INTERVAL '10 minutes'
+       RETURNING spool_id, file_id,
+         (SELECT pf.job_id FROM pdf_file pf WHERE pf.file_id = spool.file_id) as job_id,
+         image_s3_key, image_format, page_number`,
     );
-    if (rowCount && rowCount > 0) {
-      console.log(`Recovered ${rowCount} stale AI extraction jobs (vision_status reset to pending)`);
+    if (staleSpools.length > 0) {
+      console.log(`Recovered ${staleSpools.length} stale AI extraction jobs — re-enqueueing`);
+      for (const row of staleSpools) {
+        try {
+          await addAiExtractionJob({
+            spoolId: row.spool_id,
+            imageS3Key: row.image_s3_key || '',
+            imageFormat: row.image_format || 'png',
+            pageNumber: row.page_number || 1,
+            fileId: row.file_id,
+            jobId: row.job_id,
+          });
+        } catch (err) {
+          console.error(`Failed to re-enqueue stale spool ${row.spool_id}:`, (err as Error).message);
+        }
+      }
     }
   }
 

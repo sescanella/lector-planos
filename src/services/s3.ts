@@ -12,7 +12,7 @@ import { env } from '../config/env';
 
 let client: S3Client | null = null;
 
-function getClient(): S3Client {
+export function getClient(): S3Client {
   if (!client) {
     client = new S3Client({ region: env.AWS_REGION });
   }

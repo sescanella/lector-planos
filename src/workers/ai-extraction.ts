@@ -3,10 +3,10 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import { Readable } from 'stream';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getPool } from '../db';
 import { env } from '../config/env';
-import { downloadByKey } from '../services/s3';
+import { downloadByKey, getClient as getS3Client } from '../services/s3';
 import { cropRegionsFromPdf } from '../services/crop';
 import {
   extractFromCrops,
@@ -14,7 +14,7 @@ import {
   VisionFatalError,
   VisionRetryableError,
 } from '../services/vision';
-import { deduplicateRows } from '../services/normalizer';
+import { deduplicateRows, deduplicateWeldRows, deduplicateCutRows } from '../services/normalizer';
 import { addToAiDlq, AiExtractionJobData } from '../services/queue';
 import type { AiProcessorFn } from '../services/queue';
 
@@ -78,7 +78,7 @@ function sanityValidate(data: VisionExtractionResult): ValidationResult {
     }
   }
 
-  // Validate weld rows
+  // Validate and deduplicate weld rows
   if (data.soldaduras) {
     if (Math.abs(data.soldaduras.totalRowsDetected - data.soldaduras.rows.length) > 1) {
       warnings.push(
@@ -89,9 +89,14 @@ function sanityValidate(data: VisionExtractionResult): ValidationResult {
       needsReview = true;
       warnings.push(`Excessive weld rows (${data.soldaduras.rows.length} > 30) — possible hallucination`);
     }
+    const beforeWeldCount = data.soldaduras.rows.length;
+    data.soldaduras.rows = deduplicateWeldRows(data.soldaduras.rows);
+    if (data.soldaduras.rows.length < beforeWeldCount) {
+      warnings.push(`Deduplicated ${beforeWeldCount - data.soldaduras.rows.length} weld rows`);
+    }
   }
 
-  // Validate cut rows
+  // Validate and deduplicate cut rows
   if (data.cortes) {
     if (Math.abs(data.cortes.totalRowsDetected - data.cortes.rows.length) > 1) {
       warnings.push(
@@ -101,6 +106,11 @@ function sanityValidate(data: VisionExtractionResult): ValidationResult {
     if (data.cortes.rows.length > 30) {
       needsReview = true;
       warnings.push(`Excessive cut rows (${data.cortes.rows.length} > 30) — possible hallucination`);
+    }
+    const beforeCutCount = data.cortes.rows.length;
+    data.cortes.rows = deduplicateCutRows(data.cortes.rows);
+    if (data.cortes.rows.length < beforeCutCount) {
+      warnings.push(`Deduplicated ${beforeCutCount - data.cortes.rows.length} cut rows`);
     }
   }
 
@@ -142,12 +152,6 @@ function determineVisionStatus(
 }
 
 // ── S3 crop upload ──────────────────────────────────────────────────────────
-
-let s3Client: S3Client | null = null;
-function getS3Client(): S3Client {
-  if (!s3Client) s3Client = new S3Client({ region: env.AWS_REGION });
-  return s3Client;
-}
 
 async function uploadCropsToS3(
   crops: Map<string, Buffer>,

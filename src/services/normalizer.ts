@@ -215,7 +215,7 @@ export function deduplicateRows(rows: MaterialRow[]): MaterialRow[] {
   const seen = new Map<string, MaterialRow>();
 
   for (const row of rows) {
-    const key = `${row.item}|${row.description}|${row.quantity}`.toLowerCase().trim();
+    const key = `${(row.item || '').trim()}|${(row.description || '').trim()}|${(row.quantity || '').trim()}`.toLowerCase();
     const existing = seen.get(key);
 
     if (!existing || row.confidence > existing.confidence) {
@@ -224,4 +224,45 @@ export function deduplicateRows(rows: MaterialRow[]): MaterialRow[] {
   }
 
   return Array.from(seen.values());
+}
+
+/**
+ * Generic deduplication for rows with a confidence field.
+ * Uses a key-builder function to determine identity.
+ */
+function deduplicateByKey<T extends { confidence: number }>(
+  rows: T[],
+  keyFn: (row: T) => string,
+): T[] {
+  const seen = new Map<string, T>();
+  for (const row of rows) {
+    const key = keyFn(row).toLowerCase();
+    const existing = seen.get(key);
+    if (!existing || row.confidence > existing.confidence) {
+      seen.set(key, row);
+    }
+  }
+  return Array.from(seen.values());
+}
+
+import type { WeldRow, CutRow } from './vision';
+
+/**
+ * Deduplicates weld rows from overlapping crop regions.
+ * Key: weldNumber + diameter + weldType.
+ */
+export function deduplicateWeldRows(rows: WeldRow[]): WeldRow[] {
+  return deduplicateByKey(rows, r =>
+    `${(r.weldNumber || '').trim()}|${(r.diameter || '').trim()}|${(r.weldType || '').trim()}`
+  );
+}
+
+/**
+ * Deduplicates cut rows from overlapping crop regions.
+ * Key: cutNumber + diameter + length.
+ */
+export function deduplicateCutRows(rows: CutRow[]): CutRow[] {
+  return deduplicateByKey(rows, r =>
+    `${(r.cutNumber || '').trim()}|${(r.diameter || '').trim()}|${(r.length || '').trim()}`
+  );
 }

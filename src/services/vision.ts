@@ -176,7 +176,10 @@ let client: Anthropic | null = null;
 
 function getClient(): Anthropic {
   if (!client) {
-    client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    client = new Anthropic({
+      apiKey: env.ANTHROPIC_API_KEY,
+      timeout: env.VISION_TIMEOUT_MS,
+    });
   }
   return client;
 }
@@ -320,7 +323,8 @@ export async function extractFromCrops(
       const status = error.status;
 
       if (status === 401 || status === 403) {
-        recordFailure();
+        // Do NOT recordFailure() — auth errors are not transient and should not
+        // pollute the circuit breaker state
         throw new VisionFatalError(
           `Vision API auth error (${status}): ${error.message}`,
           true,

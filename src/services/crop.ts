@@ -29,7 +29,18 @@ export interface PageDimensions {
 /**
  * Four fixed crop regions validated in Experiment 3.
  * 20% overlap between table crops prevents items lost at boundaries.
+ * DPI values read from env vars (CROP_DPI, CAJETIN_DPI) so they are configurable.
  */
+export function getFixedCrops(): CropRegion[] {
+  return [
+    { id: 'right_upper',     leftPct: 45, topPct:  0, rightPct: 100, bottomPct: 40, dpi: env.CROP_DPI },
+    { id: 'right_center',    leftPct: 45, topPct: 20, rightPct: 100, bottomPct: 60, dpi: env.CROP_DPI },
+    { id: 'right_lower',     leftPct: 45, topPct: 45, rightPct: 100, bottomPct: 82, dpi: env.CROP_DPI },
+    { id: 'cajetin_titleblk', leftPct: 50, topPct: 80, rightPct: 100, bottomPct: 100, dpi: env.CAJETIN_DPI },
+  ];
+}
+
+/** Static reference for tests and default usage (uses env defaults: 600/800 DPI) */
 export const FIXED_CROPS: readonly CropRegion[] = [
   { id: 'right_upper',     leftPct: 45, topPct:  0, rightPct: 100, bottomPct: 40, dpi: 600 },
   { id: 'right_center',    leftPct: 45, topPct: 20, rightPct: 100, bottomPct: 60, dpi: 600 },
@@ -145,11 +156,12 @@ export function bboxToPixels(
     console.warn(`Reduced DPI to ${dpi} for crop "${region.id}" (OOM guard: ${Math.round(maxDim)}px > ${MAX_PIXEL_DIM}px)`);
   }
 
-  // poppler crop coordinates are in points (not pixels)
-  const x = Math.round((region.leftPct / 100) * pageWidthPts);
-  const y = Math.round((region.topPct / 100) * pageHeightPts);
-  const width = Math.round(widthPct * pageWidthPts);
-  const height = Math.round(heightPct * pageHeightPts);
+  // poppler pdfToPpm crop coordinates are in pixels at target DPI
+  const scale = dpi / 72;
+  const x = Math.round((region.leftPct / 100) * pageWidthPts * scale);
+  const y = Math.round((region.topPct / 100) * pageHeightPts * scale);
+  const width = Math.round(widthPct * pageWidthPts * scale);
+  const height = Math.round(heightPct * pageHeightPts * scale);
 
   return { x, y, width, height, effectiveDpi: dpi };
 }
@@ -170,7 +182,7 @@ export function bboxToPixels(
 export async function cropRegionsFromPdf(
   pdfPath: string,
   pageNumber: number,
-  regions: readonly CropRegion[] = FIXED_CROPS,
+  regions: readonly CropRegion[] = getFixedCrops(),
 ): Promise<Map<string, Buffer>> {
   const pageDims = await getPageDimensions(pdfPath);
   const poppler = getPoppler();
@@ -179,10 +191,11 @@ export async function cropRegionsFromPdf(
   // Create temp directory for crop output files
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lector-crop-'));
 
+  let timeoutId: NodeJS.Timeout | undefined;
   try {
     // Timeout via Promise.race
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new CropTimeoutError()), CROP_TIMEOUT_MS);
+      timeoutId = setTimeout(() => reject(new CropTimeoutError()), CROP_TIMEOUT_MS);
     });
 
     const cropAllPromise = (async () => {
@@ -219,6 +232,7 @@ export async function cropRegionsFromPdf(
 
     await Promise.race([cropAllPromise, timeoutPromise]);
   } finally {
+    if (timeoutId) clearTimeout(timeoutId);
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(err =>
       console.warn(`Failed to clean crop temp directory ${tmpDir}:`, (err as Error).message),
     );

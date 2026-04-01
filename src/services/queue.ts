@@ -152,6 +152,7 @@ export async function addAiExtractionJob(data: AiExtractionJobData): Promise<str
     attempts: 3,
     backoff: { type: 'exponential', delay: 30000 },
     removeOnComplete: { age: 7 * 24 * 3600 },
+    removeOnFail: { age: 30 * 24 * 3600 }, // keep failed jobs 30 days
   });
 
   console.log(`Queued AI extraction job: ${job.id} (spool: ${data.spoolId})`);

@@ -29,7 +29,8 @@ ALTER TABLE spool
 
 -- extraction_job: cumulative AI API cost tracking
 ALTER TABLE extraction_job
-  ADD COLUMN IF NOT EXISTS vision_cost_usd NUMERIC(10,4) NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS vision_cost_usd NUMERIC(10,4) NOT NULL DEFAULT 0
+  CHECK (vision_cost_usd >= 0);
 
 -- Index: fast lookup for pending/failed spools awaiting vision processing
 CREATE INDEX IF NOT EXISTS idx_spool_vision_status
