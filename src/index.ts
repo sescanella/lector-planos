@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import { env } from './config/env';
 import { checkDatabaseConnection, getPool, initDatabase } from './db';
-import { initQueue, shutdownQueue, startWorker, checkRedisConnection } from './services/queue';
+import { initQueue, shutdownQueue, startWorker, startAiWorker, checkRedisConnection } from './services/queue';
 import { checkS3Connection } from './services/s3';
 import jobsRouter from './routes/jobs';
 import spoolsRouter from './routes/spools';
@@ -88,6 +88,24 @@ async function start() {
 
   // Start PDF extraction worker (REQ-10 pipeline)
   startWorker(createPdfExtractionProcessor());
+
+  // Start AI extraction worker (REQ-11 pipeline)
+  // Processor will be provided by src/workers/ai-extraction.ts (task 6)
+  // startAiWorker(createAiExtractionProcessor());
+
+  // Stale job recovery: reset spools stuck in 'processing' for >10 min
+  const pool = getPool();
+  if (pool) {
+    const { rowCount } = await pool.query(
+      `UPDATE spool
+       SET vision_status = 'pending'
+       WHERE vision_status = 'processing'
+         AND updated_at < NOW() - INTERVAL '10 minutes'`,
+    );
+    if (rowCount && rowCount > 0) {
+      console.log(`Recovered ${rowCount} stale AI extraction jobs (vision_status reset to pending)`);
+    }
+  }
 
   const server = app.listen(env.PORT, () => {
     console.log(`BlueprintAI server listening on port ${env.PORT}`);

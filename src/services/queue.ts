@@ -4,13 +4,17 @@ import { env } from '../config/env';
 
 let queueConnection: IORedis | null = null;
 let workerConnection: IORedis | null = null;
+let aiWorkerConnection: IORedis | null = null;
 let queue: Queue | null = null;
 let worker: Worker | null = null;
+let aiWorker: Worker | null = null;
 let aiExtractionQueue: Queue | null = null;
+let aiDlqQueue: Queue | null = null;
 let dlqQueue: Queue | null = null;
 
 const QUEUE_NAME = 'pdf-extraction';
 const AI_EXTRACTION_QUEUE = 'ai-extraction';
+const AI_DLQ_QUEUE = 'ai-extraction-dlq';
 const DLQ_QUEUE = 'pdf-extraction-dlq';
 const CONCURRENCY = env.WORKER_CONCURRENCY;
 const JOB_TIMEOUT = 5 * 60 * 1000; // 5 minutes
@@ -69,6 +73,36 @@ export function startWorker(processor: ProcessorFn): Worker | null {
   return worker;
 }
 
+export type AiProcessorFn = (job: Job<AiExtractionJobData>) => Promise<void>;
+
+export function startAiWorker(processor: AiProcessorFn): Worker | null {
+  if (!env.REDIS_URL) return null;
+  if (aiWorker) return aiWorker;
+
+  aiWorkerConnection = createConnection()!;
+
+  aiWorker = new Worker<AiExtractionJobData>(
+    AI_EXTRACTION_QUEUE,
+    processor,
+    {
+      connection: aiWorkerConnection,
+      concurrency: env.AI_WORKER_CONCURRENCY,
+      lockDuration: 180_000, // 3 min — prevents job theft during long API calls
+    }
+  );
+
+  aiWorker.on('completed', (job) => {
+    console.log(`AI job completed: ${job.id} (spool: ${job.data.spoolId})`);
+  });
+
+  aiWorker.on('failed', (job, err) => {
+    console.error(`AI job failed: ${job?.id} — ${err.message}`);
+  });
+
+  console.log(`BullMQ AI worker started: queue=${AI_EXTRACTION_QUEUE}, concurrency=${env.AI_WORKER_CONCURRENCY}`);
+  return aiWorker;
+}
+
 export async function addExtractionJob(data: ExtractionJobData): Promise<string> {
   const q = getQueue();
   if (!q) throw new Error('Queue not initialized — REDIS_URL not set');
@@ -116,7 +150,7 @@ export async function addAiExtractionJob(data: AiExtractionJobData): Promise<str
 
   const job = await q.add('extract-ai', data, {
     attempts: 3,
-    backoff: { type: 'exponential', delay: 2000 },
+    backoff: { type: 'exponential', delay: 30000 },
     removeOnComplete: { age: 7 * 24 * 3600 },
   });
 
@@ -131,6 +165,24 @@ export async function addToDlq(data: ExtractionJobData): Promise<void> {
     removeOnComplete: false,
   });
   console.log(`Moved to DLQ: file ${data.fileId}`);
+}
+
+function getAiDlqQueue(): Queue | null {
+  if (!env.REDIS_URL) return null;
+  if (!aiDlqQueue) {
+    if (!queueConnection) queueConnection = createConnection()!;
+    aiDlqQueue = new Queue(AI_DLQ_QUEUE, { connection: queueConnection });
+  }
+  return aiDlqQueue;
+}
+
+export async function addToAiDlq(data: AiExtractionJobData): Promise<void> {
+  const q = getAiDlqQueue();
+  if (!q) return;
+  await q.add('failed-ai-extraction', data, {
+    removeOnComplete: false,
+  });
+  console.log(`Moved to AI DLQ: spool ${data.spoolId}`);
 }
 
 export async function initQueue(): Promise<void> {
@@ -160,6 +212,11 @@ export async function shutdownQueue(): Promise<void> {
     await worker.close();
     worker = null;
   }
+  if (aiWorker) {
+    console.log('Draining BullMQ AI worker...');
+    await aiWorker.close();
+    aiWorker = null;
+  }
   if (queue) {
     await queue.close();
     queue = null;
@@ -168,9 +225,17 @@ export async function shutdownQueue(): Promise<void> {
     await aiExtractionQueue.close();
     aiExtractionQueue = null;
   }
+  if (aiDlqQueue) {
+    await aiDlqQueue.close();
+    aiDlqQueue = null;
+  }
   if (dlqQueue) {
     await dlqQueue.close();
     dlqQueue = null;
+  }
+  if (aiWorkerConnection) {
+    await aiWorkerConnection.quit();
+    aiWorkerConnection = null;
   }
   if (workerConnection) {
     await workerConnection.quit();
