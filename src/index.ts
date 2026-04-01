@@ -98,9 +98,9 @@ async function start() {
   if (pool) {
     const { rowCount } = await pool.query(
       `UPDATE spool
-       SET vision_status = 'pending'
+       SET vision_status = 'pending', vision_processing_started_at = NULL
        WHERE vision_status = 'processing'
-         AND updated_at < NOW() - INTERVAL '10 minutes'`,
+         AND vision_processing_started_at < NOW() - INTERVAL '10 minutes'`,
     );
     if (rowCount && rowCount > 0) {
       console.log(`Recovered ${rowCount} stale AI extraction jobs (vision_status reset to pending)`);
