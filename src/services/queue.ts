@@ -168,7 +168,7 @@ export async function addToDlq(data: ExtractionJobData): Promise<void> {
   console.log(`Moved to DLQ: file ${data.fileId}`);
 }
 
-function getAiDlqQueue(): Queue | null {
+export function getAiDlqQueue(): Queue | null {
   if (!env.REDIS_URL) return null;
   if (!aiDlqQueue) {
     if (!queueConnection) queueConnection = createConnection()!;
@@ -184,6 +184,28 @@ export async function addToAiDlq(data: AiExtractionJobData): Promise<void> {
     removeOnComplete: false,
   });
   console.log(`Moved to AI DLQ: spool ${data.spoolId}`);
+}
+
+export async function pauseAiQueue(resumeAfterMs: number): Promise<void> {
+  if (!aiExtractionQueue) return;
+  await aiExtractionQueue.pause();
+  console.log(`AI extraction queue paused for ${resumeAfterMs / 1000}s`);
+  setTimeout(async () => {
+    try {
+      if (aiExtractionQueue) {
+        await aiExtractionQueue.resume();
+        console.log('AI extraction queue resumed');
+      }
+    } catch (err) {
+      console.error('Failed to resume AI queue:', (err as Error).message);
+    }
+  }, resumeAfterMs);
+}
+
+export async function resumeAiQueue(): Promise<void> {
+  if (!aiExtractionQueue) return;
+  await aiExtractionQueue.resume();
+  console.log('AI extraction queue resumed (manual)');
 }
 
 export async function initQueue(): Promise<void> {

@@ -83,6 +83,10 @@ if (env.VISION_MAX_COST_PER_JOB_USD <= 0) {
   throw new Error(`Invalid VISION_MAX_COST_PER_JOB_USD: ${env.VISION_MAX_COST_PER_JOB_USD} (must be > 0)`);
 }
 
+if (env.CORS_ORIGIN === '*' && env.NODE_ENV === 'production') {
+  console.warn('WARNING: CORS_ORIGIN is set to wildcard (*) in production. Set CORS_ORIGIN to your frontend domain.');
+}
+
 // Fail fast in production if S3 is not configured
 if (env.NODE_ENV === 'production' && !env.S3_BUCKET_NAME) {
   throw new Error('S3_BUCKET_NAME is required in production');

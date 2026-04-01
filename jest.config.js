@@ -5,4 +5,7 @@ module.exports = {
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.test.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
+  moduleNameMapper: {
+    '^uuid$': '<rootDir>/src/tests/__mocks__/uuid.ts',
+  },
 };

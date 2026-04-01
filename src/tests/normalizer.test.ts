@@ -3,8 +3,11 @@ import {
   normalizeMaterialRow,
   findUnmappedHeaders,
   deduplicateRows,
+  deduplicateWeldRows,
+  deduplicateCutRows,
   type MaterialRow,
 } from '../services/normalizer';
+import type { WeldRow, CutRow } from '../services/vision';
 
 // ---------------------------------------------------------------------------
 // detectFamily
@@ -219,5 +222,100 @@ describe('deduplicateRows', () => {
     const result = deduplicateRows(rows);
     expect(result).toHaveLength(1);
     expect(result[0].source).toBe('taller');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deduplicateWeldRows
+// ---------------------------------------------------------------------------
+
+describe('deduplicateWeldRows', () => {
+  function makeWeld(overrides: Partial<WeldRow> = {}): WeldRow {
+    return {
+      weldNumber: 'W-001',
+      diameter: '2"',
+      weldType: 'BW',
+      wps: 'WPS-01',
+      weldDate: null,
+      welder: null,
+      inspectionDate: null,
+      result: null,
+      confidence: 0.9,
+      ...overrides,
+    };
+  }
+
+  it('should remove duplicate welds by (weldNumber, diameter, weldType)', () => {
+    const rows: WeldRow[] = [
+      makeWeld({ confidence: 0.7 }),
+      makeWeld({ confidence: 0.95 }),
+    ];
+    const result = deduplicateWeldRows(rows);
+    expect(result).toHaveLength(1);
+    expect(result[0].confidence).toBe(0.95);
+  });
+
+  it('should keep distinct weld rows', () => {
+    const rows: WeldRow[] = [
+      makeWeld({ weldNumber: 'W-001' }),
+      makeWeld({ weldNumber: 'W-002' }),
+    ];
+    const result = deduplicateWeldRows(rows);
+    expect(result).toHaveLength(2);
+  });
+
+  it('should handle empty array', () => {
+    expect(deduplicateWeldRows([])).toEqual([]);
+  });
+
+  it('should be case-insensitive on key fields', () => {
+    const rows: WeldRow[] = [
+      makeWeld({ weldNumber: 'w-001', diameter: '2"', weldType: 'bw', confidence: 0.7 }),
+      makeWeld({ weldNumber: 'W-001', diameter: '2"', weldType: 'BW', confidence: 0.95 }),
+    ];
+    const result = deduplicateWeldRows(rows);
+    expect(result).toHaveLength(1);
+    expect(result[0].confidence).toBe(0.95);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deduplicateCutRows
+// ---------------------------------------------------------------------------
+
+describe('deduplicateCutRows', () => {
+  function makeCut(overrides: Partial<CutRow> = {}): CutRow {
+    return {
+      cutNumber: 'C-001',
+      diameter: '3"',
+      length: '500',
+      end1: 'PE',
+      end2: 'BW',
+      confidence: 0.9,
+      ...overrides,
+    };
+  }
+
+  it('should remove duplicate cuts by (cutNumber, diameter, length)', () => {
+    const rows: CutRow[] = [
+      makeCut({ confidence: 0.6 }),
+      makeCut({ confidence: 0.92 }),
+    ];
+    const result = deduplicateCutRows(rows);
+    expect(result).toHaveLength(1);
+    expect(result[0].confidence).toBe(0.92);
+  });
+
+  it('should keep distinct cut rows', () => {
+    const rows: CutRow[] = [
+      makeCut({ cutNumber: 'C-001' }),
+      makeCut({ cutNumber: 'C-002' }),
+    ];
+    const result = deduplicateCutRows(rows);
+    expect(result).toHaveLength(2);
+  });
+
+  it('should handle empty array', () => {
+    expect(deduplicateCutRows([])).toEqual([]);
   });
 });

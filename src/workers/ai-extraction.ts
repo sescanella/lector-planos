@@ -14,18 +14,57 @@ import {
   VisionRetryableError,
 } from '../services/vision';
 import { deduplicateRows, deduplicateWeldRows, deduplicateCutRows } from '../services/normalizer';
-import { addToAiDlq, AiExtractionJobData } from '../services/queue';
+import { addToAiDlq, pauseAiQueue, AiExtractionJobData } from '../services/queue';
 import type { AiProcessorFn } from '../services/queue';
 import { streamToBuffer } from '../utils/stream';
 
+// ── Job finalization ────────────────────────────────────────────────────────
+
+/**
+ * Check if all spools for a job are done processing. If so, mark the job as completed/failed.
+ * A job is "completed" if at least one spool succeeded. "failed" if ALL spools failed/skipped.
+ */
+async function checkAndFinalizeJob(jobId: string): Promise<void> {
+  const pool = getPool();
+  if (!pool) return;
+
+  const { rows } = await pool.query(
+    `SELECT
+       COUNT(*) AS total,
+       COUNT(*) FILTER (WHERE vision_status IN ('completed', 'completed_partial', 'failed', 'skipped')) AS done,
+       COUNT(*) FILTER (WHERE vision_status IN ('completed', 'completed_partial')) AS succeeded
+     FROM spool s
+     JOIN pdf_file pf ON pf.file_id = s.file_id
+     WHERE pf.job_id = $1`,
+    [jobId],
+  );
+
+  const { total, done, succeeded } = rows[0];
+  if (parseInt(total) === 0 || parseInt(done) < parseInt(total)) return; // Not all done yet
+
+  const finalStatus = parseInt(succeeded) > 0 ? 'completed' : 'failed';
+
+  await pool.query(
+    `UPDATE extraction_job
+     SET status = $2,
+         completed_at = NOW(),
+         processed_count = $3
+     WHERE job_id = $1
+       AND status = 'processing'`,
+    [jobId, finalStatus, parseInt(done)],
+  );
+
+  console.log(`Job ${jobId} finalized: status=${finalStatus}, processed=${done}/${total}, succeeded=${succeeded}`);
+}
+
 // ── Sanity validation ───────────────────────────────────────────────────────
 
-interface ValidationResult {
+export interface ValidationResult {
   needsReview: boolean;
   warnings: string[];
 }
 
-function sanityValidate(data: VisionExtractionResult): ValidationResult {
+export function sanityValidate(data: VisionExtractionResult): ValidationResult {
   const warnings: string[] = [];
   let needsReview = false;
 
@@ -109,7 +148,7 @@ function sanityValidate(data: VisionExtractionResult): ValidationResult {
 
 // ── Status determination ────────────────────────────────────────────────────
 
-function determineVisionStatus(
+export function determineVisionStatus(
   data: VisionExtractionResult,
 ): 'completed' | 'completed_partial' | 'failed' | 'skipped' {
   const hasMatTable = data.materiales && data.materiales.rows.length > 0;
@@ -152,16 +191,70 @@ async function uploadCropsToS3(
     cajetin_titleblk: 'crop_cajetin.png',
   };
 
-  for (const [cropId, buffer] of crops.entries()) {
-    const filename = cropKeyMap[cropId] || `crop_${cropId}.png`;
-    const key = `uploads/${jobId}/${fileId}/${pageNumber}/${filename}`;
-    await s3.send(new PutObjectCommand({
-      Bucket: env.S3_BUCKET_NAME,
-      Key: key,
-      Body: buffer,
-      ContentType: 'image/png',
-    }));
+  await Promise.all(
+    Array.from(crops.entries()).map(([cropId, buffer]) => {
+      const filename = cropKeyMap[cropId] || `crop_${cropId}.png`;
+      const key = `uploads/${jobId}/${fileId}/${pageNumber}/${filename}`;
+      return s3.send(new PutObjectCommand({
+        Bucket: env.S3_BUCKET_NAME,
+        Key: key,
+        Body: buffer,
+        ContentType: 'image/png',
+      }));
+    })
+  );
+}
+
+// ── PDF temp file cache ────────────────────────────────────────────────────
+// Avoids re-downloading the same PDF for every page/spool in a multi-page file.
+// Cache entry: s3Key → { path, refCount }
+
+interface PdfCacheEntry {
+  path: string;
+  refCount: number;
+  timer: NodeJS.Timeout;
+}
+
+const pdfCache = new Map<string, PdfCacheEntry>();
+const PDF_CACHE_TTL_MS = 5 * 60_000; // 5 minutes
+
+async function getCachedPdf(s3Key: string): Promise<string> {
+  const existing = pdfCache.get(s3Key);
+  if (existing) {
+    existing.refCount++;
+    // Reset TTL
+    clearTimeout(existing.timer);
+    existing.timer = setTimeout(() => evictPdfCache(s3Key), PDF_CACHE_TTL_MS);
+    return existing.path;
   }
+
+  // Download and cache
+  const stream = await downloadByKey(s3Key);
+  const buffer = await streamToBuffer(stream);
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lector-pdfcache-'));
+  const pdfPath = path.join(tmpDir, 'cached.pdf');
+  await fs.writeFile(pdfPath, buffer);
+
+  const timer = setTimeout(() => evictPdfCache(s3Key), PDF_CACHE_TTL_MS);
+  pdfCache.set(s3Key, { path: pdfPath, refCount: 1, timer });
+  return pdfPath;
+}
+
+function releaseCachedPdf(s3Key: string): void {
+  const entry = pdfCache.get(s3Key);
+  if (!entry) return;
+  entry.refCount--;
+  // Don't evict immediately — let TTL handle cleanup (other pages may need it soon)
+}
+
+function evictPdfCache(s3Key: string): void {
+  const entry = pdfCache.get(s3Key);
+  if (!entry) return;
+  pdfCache.delete(s3Key);
+  clearTimeout(entry.timer);
+  fs.rm(path.dirname(entry.path), { recursive: true, force: true }).catch(err =>
+    console.warn(`Failed to clean PDF cache for ${s3Key}:`, (err as Error).message),
+  );
 }
 
 // ── Main processor ──────────────────────────────────────────────────────────
@@ -193,25 +286,22 @@ export function createAiExtractionProcessor(): AiProcessorFn {
     }
     const pdfS3Key: string = fileRows[0].s3_key;
 
-    // 2. Download original PDF
-    let pdfBuffer: Buffer;
+    // 2. Download original PDF (cached across spools from the same file)
+    let pdfPath: string;
     try {
-      const stream = await downloadByKey(pdfS3Key);
-      pdfBuffer = await streamToBuffer(stream);
+      pdfPath = await getCachedPdf(pdfS3Key);
     } catch (err) {
       await pool.query(
         `UPDATE spool SET vision_status = 'failed', extraction_data = $2 WHERE spool_id = $1`,
         [spoolId, JSON.stringify({ error: 'Failed to download PDF from S3' })],
       );
+      try { await checkAndFinalizeJob(jobId); } catch (e) {
+        console.warn(`Failed to check job finalization for ${jobId}:`, (e as Error).message);
+      }
       throw err;
     }
 
-    // Write PDF to temp file for poppler
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lector-ai-'));
     try {
-      const pdfPath = path.join(tmpDir, 'input.pdf');
-      await fs.writeFile(pdfPath, pdfBuffer);
-
       // 3-4. Crop 4 fixed regions
       let crops: Map<string, Buffer>;
       try {
@@ -221,22 +311,28 @@ export function createAiExtractionProcessor(): AiProcessorFn {
           `UPDATE spool SET vision_status = 'failed', extraction_data = $2 WHERE spool_id = $1`,
           [spoolId, JSON.stringify({ error: `Crop failed: ${(err as Error).message}` })],
         );
+        try { await checkAndFinalizeJob(jobId); } catch (e) {
+          console.warn(`Failed to check job finalization for ${jobId}:`, (e as Error).message);
+        }
         throw err;
       }
 
-      // 5. Budget check
+      // 5. Atomic budget check — only proceed if under budget
       const { rows: budgetRows } = await pool.query(
-        `SELECT vision_cost_usd FROM extraction_job WHERE job_id = $1`,
-        [jobId],
+        `SELECT vision_cost_usd FROM extraction_job
+         WHERE job_id = $1 AND vision_cost_usd < $2`,
+        [jobId, env.VISION_MAX_COST_PER_JOB_USD],
       );
-      const currentCost = budgetRows.length > 0 ? parseFloat(budgetRows[0].vision_cost_usd) : 0;
-      if (currentCost >= env.VISION_MAX_COST_PER_JOB_USD) {
-        console.error(`ALERT: Budget exceeded for job ${jobId}: $${currentCost} >= $${env.VISION_MAX_COST_PER_JOB_USD}`);
+      if (budgetRows.length === 0) {
+        console.error(`ALERT: Budget exceeded for job ${jobId} (limit: $${env.VISION_MAX_COST_PER_JOB_USD})`);
         await pool.query(
           `UPDATE spool SET vision_status = 'failed', extraction_data = $2 WHERE spool_id = $1`,
           [spoolId, JSON.stringify({ error: 'budget_exceeded' })],
         );
-        return; // Don't retry
+        try { await checkAndFinalizeJob(jobId); } catch (e) {
+          console.warn(`Failed to check job finalization for ${jobId}:`, (e as Error).message);
+        }
+        return;
       }
 
       // 6. Call Claude Vision API
@@ -246,13 +342,19 @@ export function createAiExtractionProcessor(): AiProcessorFn {
       } catch (err) {
         if (err instanceof VisionFatalError) {
           if (err.shouldPauseQueue) {
-            console.error(`ALERT: Vision API auth failure — pausing queue. ${err.message}`);
+            console.error(`ALERT: Vision API auth failure — pausing AI queue for 5 minutes. ${err.message}`);
+            try { await pauseAiQueue(5 * 60_000); } catch (e) {
+              console.warn('Failed to pause AI queue:', (e as Error).message);
+            }
           }
           await pool.query(
             `UPDATE spool SET vision_status = 'failed', extraction_data = $2 WHERE spool_id = $1`,
             [spoolId, JSON.stringify({ error: err.message })],
           );
           await addToAiDlq(job.data);
+          try { await checkAndFinalizeJob(jobId); } catch (e) {
+            console.warn(`Failed to check job finalization for ${jobId}:`, (e as Error).message);
+          }
           return; // Fatal — don't retry
         }
         if (err instanceof VisionRetryableError) {
@@ -331,40 +433,52 @@ export function createAiExtractionProcessor(): AiProcessorFn {
           [spoolId, JSON.stringify(metadataRaw), data.cajetin.confidence],
         );
 
-        // 10c. Delete + insert material rows (idempotent)
+        // 10c. Batch insert material rows (idempotent)
         await dbClient.query('DELETE FROM material WHERE spool_id = $1', [spoolId]);
         if (data.materiales && data.materiales.rows.length > 0) {
-          for (const row of data.materiales.rows) {
+          const values: any[] = [spoolId];
+          const placeholders = data.materiales.rows.map((row, i) => {
             const { confidence, ...rawFields } = row;
-            await dbClient.query(
-              `INSERT INTO material (spool_id, raw_data, confidence_score) VALUES ($1, $2, $3)`,
-              [spoolId, JSON.stringify(rawFields), confidence],
-            );
-          }
+            const base = i * 2 + 2;
+            values.push(JSON.stringify(rawFields), confidence);
+            return `($1, $${base}, $${base + 1})`;
+          });
+          await dbClient.query(
+            `INSERT INTO material (spool_id, raw_data, confidence_score) VALUES ${placeholders.join(', ')}`,
+            values,
+          );
         }
 
-        // 10d. Delete + insert spool_union rows (welds)
+        // 10d. Batch insert spool_union rows (welds)
         await dbClient.query('DELETE FROM spool_union WHERE spool_id = $1', [spoolId]);
         if (data.soldaduras && data.soldaduras.rows.length > 0) {
-          for (const row of data.soldaduras.rows) {
+          const values: any[] = [spoolId];
+          const placeholders = data.soldaduras.rows.map((row, i) => {
             const { confidence, ...rawFields } = row;
-            await dbClient.query(
-              `INSERT INTO spool_union (spool_id, raw_data, confidence_score) VALUES ($1, $2, $3)`,
-              [spoolId, JSON.stringify(rawFields), confidence],
-            );
-          }
+            const base = i * 2 + 2;
+            values.push(JSON.stringify(rawFields), confidence);
+            return `($1, $${base}, $${base + 1})`;
+          });
+          await dbClient.query(
+            `INSERT INTO spool_union (spool_id, raw_data, confidence_score) VALUES ${placeholders.join(', ')}`,
+            values,
+          );
         }
 
-        // 10e. Delete + insert cut rows
+        // 10e. Batch insert cut rows
         await dbClient.query('DELETE FROM cut WHERE spool_id = $1', [spoolId]);
         if (data.cortes && data.cortes.rows.length > 0) {
-          for (const row of data.cortes.rows) {
+          const values: any[] = [spoolId];
+          const placeholders = data.cortes.rows.map((row, i) => {
             const { confidence, ...rawFields } = row;
-            await dbClient.query(
-              `INSERT INTO cut (spool_id, raw_data, confidence_score) VALUES ($1, $2, $3)`,
-              [spoolId, JSON.stringify(rawFields), confidence],
-            );
-          }
+            const base = i * 2 + 2;
+            values.push(JSON.stringify(rawFields), confidence);
+            return `($1, $${base}, $${base + 1})`;
+          });
+          await dbClient.query(
+            `INSERT INTO cut (spool_id, raw_data, confidence_score) VALUES ${placeholders.join(', ')}`,
+            values,
+          );
         }
 
         await dbClient.query('COMMIT');
@@ -388,11 +502,14 @@ export function createAiExtractionProcessor(): AiProcessorFn {
         `cuts=${data.cortes?.rows.length ?? 0}, cost=$${result.usage.costUsd.toFixed(4)}`,
       );
 
+      // Check if all spools for this job are done — finalize job if so
+      try { await checkAndFinalizeJob(jobId); } catch (e) {
+        console.warn(`Failed to check job finalization for ${jobId}:`, (e as Error).message);
+      }
+
     } finally {
-      // 12. Clean up temp files
-      await fs.rm(tmpDir, { recursive: true, force: true }).catch(err =>
-        console.warn(`Failed to clean temp directory ${tmpDir}:`, (err as Error).message),
-      );
+      // 12. Release cached PDF (TTL handles actual cleanup)
+      releaseCachedPdf(pdfS3Key);
     }
   };
 }

@@ -1,6 +1,36 @@
 const RETRY_DELAYS = [1000, 5000, 30000]; // 1s, 5s, 30s
 const TIMEOUT = 10000; // 10 seconds
 
+const BLOCKED_HOSTS = [
+  '127.0.0.1', 'localhost', '0.0.0.0', '::1',
+  '169.254.169.254', // AWS metadata
+  'metadata.google.internal', // GCP metadata
+];
+
+function isAllowedWebhookUrl(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+
+    // Must be HTTPS
+    if (url.protocol !== 'https:') return false;
+
+    // Block known internal/metadata hosts
+    if (BLOCKED_HOSTS.includes(url.hostname)) return false;
+
+    // Block private IP ranges
+    const parts = url.hostname.split('.').map(Number);
+    if (parts.length === 4 && parts.every(n => !isNaN(n))) {
+      if (parts[0] === 10) return false; // 10.x.x.x
+      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return false; // 172.16-31.x.x
+      if (parts[0] === 192 && parts[1] === 168) return false; // 192.168.x.x
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 interface WebhookPayload {
   job_id: string;
   status: string;
@@ -74,6 +104,11 @@ export async function notifyJobCompletion(
   errorMessage?: string
 ): Promise<void> {
   if (!webhookUrl) return;
+
+  if (!isAllowedWebhookUrl(webhookUrl)) {
+    console.warn(`Blocked webhook to disallowed URL: ${webhookUrl}`);
+    return;
+  }
 
   await sendWebhook(webhookUrl, {
     job_id: jobId,

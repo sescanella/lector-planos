@@ -6,6 +6,43 @@ import { addAiExtractionJob, addToDlq, ExtractionJobData } from '../services/que
 import type { ProcessorFn } from '../services/queue';
 import { streamToBuffer } from '../utils/stream';
 
+/**
+ * Check if all spools for a job are done processing. If so, mark the job as completed/failed.
+ * Duplicated from ai-extraction.ts to avoid circular imports — kept minimal.
+ */
+async function checkAndFinalizeJob(jobId: string): Promise<void> {
+  const pool = getPool();
+  if (!pool) return;
+
+  const { rows } = await pool.query(
+    `SELECT
+       COUNT(*) AS total,
+       COUNT(*) FILTER (WHERE vision_status IN ('completed', 'completed_partial', 'failed', 'skipped')) AS done,
+       COUNT(*) FILTER (WHERE vision_status IN ('completed', 'completed_partial')) AS succeeded
+     FROM spool s
+     JOIN pdf_file pf ON pf.file_id = s.file_id
+     WHERE pf.job_id = $1`,
+    [jobId],
+  );
+
+  const { total, done, succeeded } = rows[0];
+  if (parseInt(total) === 0 || parseInt(done) < parseInt(total)) return;
+
+  const finalStatus = parseInt(succeeded) > 0 ? 'completed' : 'failed';
+
+  await pool.query(
+    `UPDATE extraction_job
+     SET status = $2,
+         completed_at = NOW(),
+         processed_count = $3
+     WHERE job_id = $1
+       AND status = 'processing'`,
+    [jobId, finalStatus, parseInt(done)],
+  );
+
+  console.log(`Job ${jobId} finalized: status=${finalStatus}, processed=${done}/${total}, succeeded=${succeeded}`);
+}
+
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 async function markPdfFileFailed(
@@ -89,8 +126,15 @@ export function createPdfExtractionProcessor(): ProcessorFn {
         const imageS3Key = await uploadPageImage(jobId, fileId, page.pageNumber, page.buffer, page.format);
 
         const { rows } = await pool.query(
-          `INSERT INTO spool (file_id, page_number, image_s3_key, image_format, extraction_status)
-           VALUES ($1, $2, $3, $4, 'extracted')
+          `INSERT INTO spool (file_id, page_number, image_s3_key, image_format, extraction_status, ai_enqueue_status)
+           VALUES ($1, $2, $3, $4, 'extracted', 'pending')
+           ON CONFLICT (file_id, page_number) DO UPDATE SET
+             image_s3_key = EXCLUDED.image_s3_key,
+             image_format = EXCLUDED.image_format,
+             extraction_status = EXCLUDED.extraction_status,
+             vision_status = 'pending',
+             ai_enqueue_status = EXCLUDED.ai_enqueue_status,
+             updated_at = NOW()
            RETURNING spool_id`,
           [fileId, page.pageNumber, imageS3Key, page.format],
         );
@@ -103,21 +147,30 @@ export function createPdfExtractionProcessor(): ProcessorFn {
         });
       } catch (err) {
         console.error(`Failed to process page ${page.pageNumber} of file ${fileId}:`, (err as Error).message);
-        // Create failed Spool record
+        // Create or update failed Spool record — mark vision_status as 'skipped' since no AI job will run
         await pool.query(
-          `INSERT INTO spool (file_id, page_number, extraction_status)
-           VALUES ($1, $2, 'failed')`,
+          `INSERT INTO spool (file_id, page_number, extraction_status, vision_status)
+           VALUES ($1, $2, 'failed', 'skipped')
+           ON CONFLICT (file_id, page_number) DO UPDATE SET
+             extraction_status = 'failed',
+             vision_status = 'skipped',
+             updated_at = NOW()`,
           [fileId, page.pageNumber],
         ).catch(dbErr => console.error(`Failed to create failed spool record:`, (dbErr as Error).message));
         uploadFailedCount++;
       }
     }
 
-    // Create failed Spool records for pages that failed during extraction
+    // Create or update failed Spool records for pages that failed during extraction
+    // Mark vision_status as 'skipped' since no AI job will run for these
     for (const failedPageNum of result.failedPages) {
       await pool.query(
-        `INSERT INTO spool (file_id, page_number, extraction_status)
-         VALUES ($1, $2, 'failed')`,
+        `INSERT INTO spool (file_id, page_number, extraction_status, vision_status)
+         VALUES ($1, $2, 'failed', 'skipped')
+         ON CONFLICT (file_id, page_number) DO UPDATE SET
+           extraction_status = 'failed',
+           vision_status = 'skipped',
+           updated_at = NOW()`,
         [fileId, failedPageNum],
       ).catch(dbErr => console.error(`Failed to create failed spool record:`, (dbErr as Error).message));
     }
@@ -139,9 +192,12 @@ export function createPdfExtractionProcessor(): ProcessorFn {
       [fileId, finalStatus, result.totalPages, totalFailedCount, errorMsg],
     );
 
-    // If all failed, move to DLQ
+    // If all failed, move to DLQ and check if job can be finalized
     if (succeededCount === 0) {
       await addToDlq(job.data);
+      try { await checkAndFinalizeJob(jobId); } catch (e) {
+        console.warn(`Failed to check job finalization for ${jobId}:`, (e as Error).message);
+      }
       return;
     }
 
@@ -165,13 +221,17 @@ export function createPdfExtractionProcessor(): ProcessorFn {
         console.error(`Failed to enqueue AI extraction for spool ${spool.spoolId}:`, (err instanceof Error ? err.message : String(err)));
         failedEnqueues.push(spool.spoolId);
         await pool.query(
-          `UPDATE spool SET ai_enqueue_status = 'failed' WHERE spool_id = $1`,
+          `UPDATE spool SET ai_enqueue_status = 'failed', vision_status = 'skipped' WHERE spool_id = $1`,
           [spool.spoolId],
         ).catch(dbErr => console.error(`Failed to update ai_enqueue_status:`, (dbErr instanceof Error ? dbErr.message : String(dbErr))));
       }
     }
     if (failedEnqueues.length > 0) {
       console.error(`ALERT: ${failedEnqueues.length} spools failed AI enqueue for file ${fileId}: [${failedEnqueues.join(', ')}]`);
+      // Some spools were marked as skipped — check if this completes the job
+      try { await checkAndFinalizeJob(jobId); } catch (e) {
+        console.warn(`Failed to check job finalization for ${jobId}:`, (e as Error).message);
+      }
     }
 
     console.log(`PDF processed: ${filename} — ${succeededCount} pages extracted, ${totalFailedCount} failed`);

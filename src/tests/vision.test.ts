@@ -93,6 +93,29 @@ describe('parseVisionResponse', () => {
 });
 
 // ---------------------------------------------------------------------------
+// parseVisionResponse edge cases
+// ---------------------------------------------------------------------------
+
+describe('parseVisionResponse edge cases', () => {
+  it('should handle valid JSON with wrong schema (no runtime validation)', () => {
+    const result = parseVisionResponse('{"foo": "bar"}');
+    expect(result).toEqual({ foo: 'bar' });
+  });
+
+  it('should extract JSON from markdown with language tag', () => {
+    const raw = '```json\n{"cajetin":{"confidence":0.9}}\n```';
+    const result = parseVisionResponse(raw);
+    expect(result).toHaveProperty('cajetin');
+  });
+
+  it('should handle nested braces in regex fallback', () => {
+    const raw = 'Some text {"data": {"nested": {"deep": true}}} more text';
+    const result = parseVisionResponse(raw);
+    expect(result).toHaveProperty('data');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Error types
 // ---------------------------------------------------------------------------
 

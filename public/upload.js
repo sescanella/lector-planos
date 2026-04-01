@@ -7,9 +7,16 @@
 
   var API_BASE = '/api/v1';
 
-  // Read API key from server-rendered config
+  // Read API key from sessionStorage (user enters it once per session)
   function getApiKey() {
-    return (window.__blueprintConfig && window.__blueprintConfig.apiKey) || '';
+    var key = sessionStorage.getItem('blueprintai_apiKey');
+    if (!key) {
+      key = prompt('Introduce tu API Key para autenticarte:');
+      if (key) {
+        sessionStorage.setItem('blueprintai_apiKey', key);
+      }
+    }
+    return key || '';
   }
 
   // Set auth headers on an XHR request

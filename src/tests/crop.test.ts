@@ -111,6 +111,34 @@ describe('bboxToPixels', () => {
   });
 });
 
+describe('bboxToPixels edge cases', () => {
+  it('should handle very small crop region', () => {
+    const region: CropRegion = { id: 'tiny', leftPct: 49, topPct: 49, rightPct: 51, bottomPct: 51, dpi: 600 };
+    const result = bboxToPixels(region, 841.89, 595.28);
+    expect(result.width).toBeGreaterThan(0);
+    expect(result.height).toBeGreaterThan(0);
+  });
+
+  it('should handle full-page crop region', () => {
+    const region: CropRegion = { id: 'full', leftPct: 0, topPct: 0, rightPct: 100, bottomPct: 100, dpi: 300 };
+    const result = bboxToPixels(region, 841.89, 595.28);
+    expect(result.x).toBe(0);
+    expect(result.y).toBe(0);
+  });
+
+  it('should trigger OOM guard for very high DPI on large page', () => {
+    const region: CropRegion = { id: 'huge', leftPct: 0, topPct: 0, rightPct: 100, bottomPct: 100, dpi: 1200 };
+    const result = bboxToPixels(region, 2383.94, 1683.78); // A1 in points
+    expect(result.effectiveDpi).toBeLessThan(1200);
+  });
+
+  it('should not reduce DPI when dimensions are within limit', () => {
+    const region: CropRegion = { id: 'ok', leftPct: 45, topPct: 0, rightPct: 100, bottomPct: 40, dpi: 600 };
+    const result = bboxToPixels(region, 841.89, 595.28);
+    expect(result.effectiveDpi).toBe(600);
+  });
+});
+
 describe('FIXED_CROPS', () => {
   it('has exactly 4 regions', () => {
     expect(FIXED_CROPS).toHaveLength(4);
