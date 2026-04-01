@@ -1,25 +1,12 @@
 import { Job } from 'bullmq';
-import { Readable } from 'stream';
 import { getPool } from '../db';
 import { downloadPdf, uploadPageImage } from '../services/s3';
 import { processPdf, PdfCorruptedError, PdfEmptyError, PdfTimeoutError, PdfProcessingResult } from '../services/pdf-processor';
 import { addAiExtractionJob, addToDlq, ExtractionJobData } from '../services/queue';
 import type { ProcessorFn } from '../services/queue';
+import { streamToBuffer } from '../utils/stream';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-
-async function streamToBuffer(stream: Readable): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  try {
-    for await (const chunk of stream) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    return Buffer.concat(chunks);
-  } catch (err) {
-    stream.destroy();
-    throw err;
-  }
-}
 
 async function markPdfFileFailed(
   fileId: string,

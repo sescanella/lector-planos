@@ -62,7 +62,7 @@ const HEADER_MAPS: Record<Exclude<FamilyId, 'unknown'>, HeaderMap> = {
 const FAMILY_SIGNATURES: Record<Exclude<FamilyId, 'unknown'>, string[]> = {
   familia_a: ['PT NO', 'DIA (IN)', 'CMDTY CODE', 'CANT.', 'EPC', 'CENTINELA', 'FLUOR', 'SALFA', 'MATERIAL DE TALLER'],
   familia_b: ['ITEM', 'DIAM.', 'CODIGO', 'CANTIDAD', 'MK', 'FASTPACK', 'FAST PACK', 'LISTADO'],
-  familia_c: ['BESALCO'],
+  familia_c: ['BESALCO', 'FP'],
 };
 
 // ---------------------------------------------------------------------------

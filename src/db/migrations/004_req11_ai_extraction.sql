@@ -21,7 +21,8 @@ ALTER TABLE spool
   CHECK (
     drawing_format IS NULL
     OR (
-      jsonb_exists(drawing_format, 'paperSize')
+      jsonb_typeof(drawing_format) = 'object'
+      AND jsonb_exists(drawing_format, 'paperSize')
       AND jsonb_exists(drawing_format, 'orientation')
       AND jsonb_exists(drawing_format, 'familyHint')
     )

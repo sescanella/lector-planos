@@ -54,7 +54,7 @@ export interface VisionExtractionResult {
     totalRowsDetected: number;
     confidence: number;
     source?: 'single' | 'taller_campo';
-  };
+  } | null;
   soldaduras: {
     rows: WeldRow[];
     rawHeaders: string[];

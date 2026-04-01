@@ -33,8 +33,8 @@ describe('parseVisionResponse', () => {
   it('parses valid JSON directly', () => {
     const json = JSON.stringify(makeValidResult());
     const result = parseVisionResponse(json);
-    expect(result.materiales.rows).toHaveLength(1);
-    expect(result.materiales.rows[0].item).toBe('1');
+    expect(result.materiales!.rows).toHaveLength(1);
+    expect(result.materiales!.rows[0].item).toBe('1');
     expect(result.overallConfidence).toBe(0.92);
   });
 
@@ -42,7 +42,7 @@ describe('parseVisionResponse', () => {
     const json = JSON.stringify(makeValidResult());
     const wrapped = '```json\n' + json + '\n```';
     const result = parseVisionResponse(wrapped);
-    expect(result.materiales.rows).toHaveLength(1);
+    expect(result.materiales!.rows).toHaveLength(1);
   });
 
   it('extracts JSON from code fences without language tag', () => {
@@ -56,7 +56,7 @@ describe('parseVisionResponse', () => {
     const json = JSON.stringify(makeValidResult());
     const wrapped = 'Here is the extraction result:\n\n' + json + '\n\nDone.';
     const result = parseVisionResponse(wrapped);
-    expect(result.materiales.rows[0].code).toBe('ABC');
+    expect(result.materiales!.rows[0].code).toBe('ABC');
   });
 
   it('throws on completely unparseable input', () => {
@@ -84,11 +84,11 @@ describe('parseVisionResponse', () => {
 
   it('preserves split table source field', () => {
     const data = makeValidResult();
-    data.materiales.source = 'taller_campo';
-    data.materiales.rows[0].source = 'taller';
+    data.materiales!.source = 'taller_campo';
+    data.materiales!.rows[0].source = 'taller';
     const result = parseVisionResponse(JSON.stringify(data));
-    expect(result.materiales.source).toBe('taller_campo');
-    expect(result.materiales.rows[0].source).toBe('taller');
+    expect(result.materiales!.source).toBe('taller_campo');
+    expect(result.materiales!.rows[0].source).toBe('taller');
   });
 });
 

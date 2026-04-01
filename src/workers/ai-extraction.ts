@@ -2,7 +2,6 @@ import { Job } from 'bullmq';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { Readable } from 'stream';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getPool } from '../db';
 import { env } from '../config/env';
@@ -17,21 +16,7 @@ import {
 import { deduplicateRows, deduplicateWeldRows, deduplicateCutRows } from '../services/normalizer';
 import { addToAiDlq, AiExtractionJobData } from '../services/queue';
 import type { AiProcessorFn } from '../services/queue';
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-async function streamToBuffer(stream: Readable): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  try {
-    for await (const chunk of stream) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    return Buffer.concat(chunks);
-  } catch (err) {
-    stream.destroy();
-    throw err;
-  }
-}
+import { streamToBuffer } from '../utils/stream';
 
 // ── Sanity validation ───────────────────────────────────────────────────────
 
@@ -183,6 +168,9 @@ async function uploadCropsToS3(
 
 export function createAiExtractionProcessor(): AiProcessorFn {
   return async (job: Job<AiExtractionJobData>): Promise<void> => {
+    // imageS3Key is the 200 DPI PNG from REQ-10 page extraction. It is NOT used here
+    // because crop regions require the original PDF rendered at higher DPI (400+) via
+    // poppler. Kept in job data for potential future use (e.g. quick-preview features).
     const { spoolId, imageS3Key, pageNumber, fileId, jobId } = job.data;
     const pool = getPool();
     if (!pool) throw new Error('Database not available');
