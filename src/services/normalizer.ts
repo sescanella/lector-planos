@@ -85,7 +85,11 @@ export function detectFamily(rawHeaders: string[], familyHint: string = ''): Fam
   for (const [family, signatures] of Object.entries(FAMILY_SIGNATURES) as [Exclude<FamilyId, 'unknown'>, string[]][]) {
     let score = 0;
     for (const sig of signatures) {
-      if (combined.some(c => c.includes(sig.toUpperCase()))) {
+      const upperSig = sig.toUpperCase();
+      // Hint matches get a bonus (+5) to prioritize explicit family identification
+      if (upperHint.includes(upperSig)) {
+        score += 5;
+      } else if (upperHeaders.some(h => h.includes(upperSig))) {
         score++;
       }
     }
