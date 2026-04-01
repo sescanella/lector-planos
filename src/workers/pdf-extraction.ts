@@ -2,7 +2,7 @@ import { Job } from 'bullmq';
 import { Readable } from 'stream';
 import { getPool } from '../db';
 import { downloadPdf, uploadPageImage } from '../services/s3';
-import { processPdf, PdfCorruptedError, PdfEmptyError, PdfTimeoutError } from '../services/pdf-processor';
+import { processPdf, PdfCorruptedError, PdfEmptyError, PdfTimeoutError, PdfProcessingResult } from '../services/pdf-processor';
 import { addAiExtractionJob, addToDlq, ExtractionJobData } from '../services/queue';
 import type { ProcessorFn } from '../services/queue';
 
@@ -28,7 +28,7 @@ async function markPdfFileFailed(
   failedPages?: number,
 ): Promise<void> {
   const pool = getPool();
-  if (!pool) return;
+  if (!pool) throw new Error('Database not available');
   await pool.query(
     `UPDATE pdf_file
      SET status = 'failed',
@@ -72,7 +72,7 @@ export function createPdfExtractionProcessor(): ProcessorFn {
     }
 
     // Process PDF — extract pages
-    let result;
+    let result: PdfProcessingResult;
     try {
       result = await processPdf(pdfBuffer);
     } catch (err) {

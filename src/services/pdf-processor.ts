@@ -131,6 +131,11 @@ export async function processPdf(
       throw new PdfEmptyError();
     }
 
+    const MAX_PAGE_COUNT = 500;
+    if (totalPages > MAX_PAGE_COUNT) {
+      throw new PdfCorruptedError(`PDF has ${totalPages} pages, maximum is ${MAX_PAGE_COUNT}.`);
+    }
+
     // Set up abort controller for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);

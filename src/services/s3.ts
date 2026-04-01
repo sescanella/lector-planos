@@ -69,6 +69,10 @@ export async function downloadPdf(
     Key: key,
   }));
 
+  if (!response.Body) {
+    throw new Error(`S3 object not found: ${key}`);
+  }
+
   console.log(`S3 download: ${key}`);
   return response.Body as Readable;
 }
@@ -140,8 +144,8 @@ export async function uploadPageImage(
     }
   }
 
-  // TypeScript can't infer that the loop always returns or throws
-  throw new Error(`S3 upload failed after ${maxAttempts} attempts: ${key}`);
+  // Unreachable: loop above always returns on success or throws on final attempt
+  return undefined as never;
 }
 
 export async function getPresignedUrl(s3Key: string): Promise<string> {
