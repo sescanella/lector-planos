@@ -6,7 +6,7 @@ import multer from 'multer';
 import path from 'path';
 import { env } from './config/env';
 import { checkDatabaseConnection, getPool, initDatabase } from './db';
-import { initQueue, shutdownQueue, startWorker, startAiWorker, checkRedisConnection, addAiExtractionJob, addExtractionJob } from './services/queue';
+import { initQueue, shutdownQueue, startWorker, startAiWorker, startExcelWorker, checkRedisConnection, addAiExtractionJob, addExtractionJob } from './services/queue';
 import { checkS3Connection } from './services/s3';
 import jobsRouter from './routes/jobs';
 import spoolsRouter from './routes/spools';
@@ -14,8 +14,11 @@ import adminRouter from './routes/admin';
 import { authMiddleware } from './middleware/auth';
 import { createPdfExtractionProcessor } from './workers/pdf-extraction';
 import { createAiExtractionProcessor } from './workers/ai-extraction';
+import { createExcelGenerationProcessor } from './workers/excel-generation';
+import exportRouter from './routes/export';
 
 const app = express();
+app.set('trust proxy', 1);
 
 app.use(cors({
   origin: env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(','),
@@ -39,6 +42,7 @@ app.use('/api/v1', apiLimiter);
 
 // Serve static frontend files (public/index.html serves at /)
 // Service info is available at GET /health
+// NOTE: Frontend auth must use session-based flow or OAuth — never expose API_KEY via endpoints
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Health check
@@ -63,6 +67,7 @@ app.get('/health', async (_req, res) => {
 app.use('/api/v1', authMiddleware);
 app.use('/api/v1/jobs', jobsRouter);
 app.use('/api/v1/spools', spoolsRouter);
+app.use('/api/v1/jobs', exportRouter);
 app.use('/api/v1/admin', adminRouter);
 
 // Multer error-handling middleware
@@ -158,6 +163,9 @@ async function start() {
 
   // Start AI extraction worker (REQ-11 pipeline)
   startAiWorker(createAiExtractionProcessor());
+
+  // Start Excel generation worker (REQ-12 pipeline)
+  startExcelWorker(createExcelGenerationProcessor());
 
   // Run stale recovery at startup
   await recoverStaleJobs();

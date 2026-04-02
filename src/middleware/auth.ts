@@ -1,6 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
-import { timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { env } from '../config/env';
+
+/**
+ * Timing-safe string comparison using HMAC digests.
+ * HMAC both inputs to fixed-length digests — eliminates length side-channel.
+ */
+function safeCompare(a: string, b: string): boolean {
+  const hashA = createHmac('sha256', 'key-compare').update(a).digest();
+  const hashB = createHmac('sha256', 'key-compare').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
 
 /**
  * API key authentication middleware.
@@ -23,22 +33,10 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 
   const apiKey = req.header('X-API-Key');
 
-  if (!apiKey) {
+  if (!apiKey || !safeCompare(apiKey, env.API_KEY)) {
     res.status(401).json({
       error: 'unauthorized',
-      message: 'Missing API key',
-    });
-    return;
-  }
-
-  // Timing-safe comparison to prevent timing attacks
-  const keyBuffer = Buffer.from(env.API_KEY);
-  const providedBuffer = Buffer.from(apiKey);
-
-  if (keyBuffer.length !== providedBuffer.length || !timingSafeEqual(keyBuffer, providedBuffer)) {
-    res.status(401).json({
-      error: 'unauthorized',
-      message: 'Invalid API key',
+      message: 'Invalid or missing API key',
     });
     return;
   }

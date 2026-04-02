@@ -41,6 +41,7 @@ export async function uploadPdf(
         Key: key,
         Body: body,
         ContentType: 'application/pdf',
+        ServerSideEncryption: 'AES256',
       },
     });
     await upload.done();
@@ -50,6 +51,7 @@ export async function uploadPdf(
       Key: key,
       Body: body,
       ContentType: 'application/pdf',
+      ServerSideEncryption: 'AES256',
     }));
   }
 
@@ -143,6 +145,7 @@ export async function uploadPageImage(
         Key: key,
         Body: imageBuffer,
         ContentType: CONTENT_TYPES[format],
+        ServerSideEncryption: 'AES256',
       }));
       console.log(`S3 upload page image: ${key} (${imageBuffer.length} bytes)`);
       return key;
@@ -170,6 +173,64 @@ export async function getPresignedUrl(s3Key: string): Promise<string> {
       Key: s3Key,
     }),
     { expiresIn: 3600 } // 1 hour
+  );
+  return url;
+}
+
+export async function uploadExcel(
+  exportId: string,
+  filePath: string
+): Promise<{ s3Key: string; fileSizeBytes: number }> {
+  const { readFile, stat } = await import('fs/promises');
+  const s3Key = `exports/${exportId}.xlsx`;
+  const s3 = getClient();
+
+  const fileStat = await stat(filePath);
+  const fileSizeBytes = fileStat.size;
+
+  if (fileSizeBytes > 5 * 1024 * 1024) {
+    const { createReadStream } = await import('fs');
+    const stream = createReadStream(filePath);
+    const upload = new Upload({
+      client: s3,
+      params: {
+        Bucket: env.S3_BUCKET_NAME,
+        Key: s3Key,
+        Body: stream,
+        ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ServerSideEncryption: 'AES256',
+      },
+    });
+    await upload.done();
+  } else {
+    const fileBuffer = await readFile(filePath);
+    await s3.send(new PutObjectCommand({
+      Bucket: env.S3_BUCKET_NAME,
+      Key: s3Key,
+      Body: fileBuffer,
+      ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ServerSideEncryption: 'AES256',
+    }));
+  }
+
+  console.log(`S3 upload excel: ${s3Key} (${fileSizeBytes} bytes)`);
+  return { s3Key, fileSizeBytes };
+}
+
+export async function getExportPresignedUrl(
+  s3Key: string,
+  filename: string
+): Promise<string> {
+  const s3 = getClient();
+  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const url = await getSignedUrl(
+    s3,
+    new GetObjectCommand({
+      Bucket: env.S3_BUCKET_NAME,
+      Key: s3Key,
+      ResponseContentDisposition: `attachment; filename="${safeFilename}"`,
+    }),
+    { expiresIn: env.EXPORT_PRESIGNED_EXPIRY_SECS }
   );
   return url;
 }
