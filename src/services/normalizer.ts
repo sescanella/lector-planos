@@ -76,7 +76,6 @@ const FAMILY_SIGNATURES: Record<Exclude<FamilyId, 'unknown'>, string[]> = {
 export function detectFamily(rawHeaders: string[], familyHint: string = ''): FamilyId {
   const upperHint = familyHint.toUpperCase();
   const upperHeaders = rawHeaders.map(h => h.toUpperCase().trim());
-  const combined = [...upperHeaders, upperHint];
 
   // Score each family by how many signature keywords match
   let bestFamily: FamilyId = 'unknown';

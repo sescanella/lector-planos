@@ -118,6 +118,12 @@ if (env.NODE_ENV === 'production' && !env.REDIS_URL) {
 if (env.NODE_ENV === 'production' && !env.S3_BUCKET_NAME) {
   throw new Error('S3_BUCKET_NAME is required in production');
 }
+if (env.NODE_ENV === 'production' && (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY)) {
+  throw new Error('AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required in production');
+}
 if (env.NODE_ENV === 'production' && !env.API_KEY) {
   throw new Error('API_KEY is required in production');
+}
+if (env.NODE_ENV === 'production' && env.API_KEY && env.API_KEY.length < 32) {
+  throw new Error('API_KEY must be at least 32 characters in production');
 }

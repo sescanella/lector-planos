@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import { env } from '../config/env';
 
 /**
@@ -7,8 +7,8 @@ import { env } from '../config/env';
  * HMAC both inputs to fixed-length digests — eliminates length side-channel.
  */
 function safeCompare(a: string, b: string): boolean {
-  const hashA = createHmac('sha256', 'key-compare').update(a).digest();
-  const hashB = createHmac('sha256', 'key-compare').update(b).digest();
+  const hashA = createHash('sha256').update(a).digest();
+  const hashB = createHash('sha256').update(b).digest();
   return timingSafeEqual(hashA, hashB);
 }
 

@@ -5,43 +5,7 @@ import { processPdf, PdfCorruptedError, PdfEmptyError, PdfTimeoutError, PdfProce
 import { addAiExtractionJob, addToDlq, ExtractionJobData } from '../services/queue';
 import type { ProcessorFn } from '../services/queue';
 import { streamToBuffer } from '../utils/stream';
-
-/**
- * Check if all spools for a job are done processing. If so, mark the job as completed/failed.
- * Duplicated from ai-extraction.ts to avoid circular imports — kept minimal.
- */
-async function checkAndFinalizeJob(jobId: string): Promise<void> {
-  const pool = getPool();
-  if (!pool) return;
-
-  const { rows } = await pool.query(
-    `SELECT
-       COUNT(*) AS total,
-       COUNT(*) FILTER (WHERE vision_status IN ('completed', 'completed_partial', 'failed', 'skipped')) AS done,
-       COUNT(*) FILTER (WHERE vision_status IN ('completed', 'completed_partial')) AS succeeded
-     FROM spool s
-     JOIN pdf_file pf ON pf.file_id = s.file_id
-     WHERE pf.job_id = $1`,
-    [jobId],
-  );
-
-  const { total, done, succeeded } = rows[0];
-  if (parseInt(total) === 0 || parseInt(done) < parseInt(total)) return;
-
-  const finalStatus = parseInt(succeeded) > 0 ? 'completed' : 'failed';
-
-  await pool.query(
-    `UPDATE extraction_job
-     SET status = $2,
-         completed_at = NOW(),
-         processed_count = $3
-     WHERE job_id = $1
-       AND status = 'processing'`,
-    [jobId, finalStatus, parseInt(done)],
-  );
-
-  console.log(`Job ${jobId} finalized: status=${finalStatus}, processed=${done}/${total}, succeeded=${succeeded}`);
-}
+import { checkAndFinalizeJob } from '../utils/job-finalization';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 

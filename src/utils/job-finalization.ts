@@ -1,0 +1,38 @@
+import { getPool } from '../db';
+
+/**
+ * Check if all spools for a job are done processing. If so, mark the job as completed/failed.
+ * A job is "completed" if at least one spool succeeded. "failed" if ALL spools failed/skipped.
+ */
+export async function checkAndFinalizeJob(jobId: string): Promise<void> {
+  const pool = getPool();
+  if (!pool) return;
+
+  const { rows } = await pool.query(
+    `SELECT
+       COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE vision_status IN ('completed', 'completed_partial', 'failed', 'skipped'))::int AS done,
+       COUNT(*) FILTER (WHERE vision_status IN ('completed', 'completed_partial'))::int AS succeeded
+     FROM spool s
+     JOIN pdf_file pf ON pf.file_id = s.file_id
+     WHERE pf.job_id = $1`,
+    [jobId],
+  );
+
+  const { total, done, succeeded } = rows[0];
+  if (total === 0 || done < total) return;
+
+  const finalStatus = succeeded > 0 ? 'completed' : 'failed';
+
+  await pool.query(
+    `UPDATE extraction_job
+     SET status = $2,
+         completed_at = NOW(),
+         processed_count = $3
+     WHERE job_id = $1
+       AND status = 'processing'`,
+    [jobId, finalStatus, done],
+  );
+
+  console.log(`Job ${jobId} finalized: status=${finalStatus}, processed=${done}/${total}, succeeded=${succeeded}`);
+}

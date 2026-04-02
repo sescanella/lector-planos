@@ -23,7 +23,7 @@ router.get('/:spoolId', async (req: Request, res: Response) => {
     }
 
     const { rows: spoolRows } = await pool.query(
-      'SELECT spool_id, file_id, page_number, spool_number, confidence_score, created_at, updated_at FROM spool WHERE spool_id = $1',
+      'SELECT spool_id, file_id, page_number, spool_number, confidence_score, extraction_status, created_at, updated_at FROM spool WHERE spool_id = $1',
       [spoolId]
     );
 
@@ -57,6 +57,7 @@ router.get('/:spoolId', async (req: Request, res: Response) => {
       spool_id: spool.spool_id,
       spool_number: spool.spool_number,
       confidence_score: spool.confidence_score,
+      extraction_status: spool.extraction_status,
       metadata: metadata.rows[0] || null,
       materials: materials.rows,
       unions: unions.rows,
@@ -113,6 +114,34 @@ router.post('/:spoolId/corrections', async (req: Request, res: Response) => {
       return;
     }
 
+    // Presence validation
+    if (original_value === undefined || corrected_value === undefined) {
+      res.status(400).json({
+        error: 'validation_error',
+        message: 'Missing required fields',
+        details: [{ field: 'original_value/corrected_value', message: 'Both values are required' }],
+      });
+      return;
+    }
+
+    // Type validation — only accept string, number, or null
+    if (original_value !== null && original_value !== undefined && typeof original_value !== 'string' && typeof original_value !== 'number') {
+      res.status(400).json({
+        error: 'validation_error',
+        message: 'Invalid original_value type',
+        details: [{ field: 'original_value', message: 'Must be string, number, or null' }],
+      });
+      return;
+    }
+    if (corrected_value !== null && corrected_value !== undefined && typeof corrected_value !== 'string' && typeof corrected_value !== 'number') {
+      res.status(400).json({
+        error: 'validation_error',
+        message: 'Invalid corrected_value type',
+        details: [{ field: 'corrected_value', message: 'Must be string, number, or null' }],
+      });
+      return;
+    }
+
     // Length validation
     const MAX_VALUE_LENGTH = 10000; // 10KB max per value
     if (typeof original_value === 'string' && original_value.length > MAX_VALUE_LENGTH) {
@@ -138,15 +167,6 @@ router.post('/:spoolId/corrections', async (req: Request, res: Response) => {
         error: 'validation_error',
         message: 'Invalid field_id format',
         details: [{ field: 'field_id', message: 'Must be a valid UUID' }],
-      });
-      return;
-    }
-
-    if (original_value === undefined || corrected_value === undefined) {
-      res.status(400).json({
-        error: 'validation_error',
-        message: 'Missing required fields',
-        details: [{ field: 'original_value/corrected_value', message: 'Both values are required' }],
       });
       return;
     }

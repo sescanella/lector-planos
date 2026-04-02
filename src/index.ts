@@ -40,8 +40,10 @@ app.use(helmet({
       connectSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
+      baseUri: ["'none'"],
     },
   },
+  frameguard: { action: 'deny' },
 }));
 
 // Rate limiting
@@ -77,7 +79,6 @@ app.get('/health', async (_req, res) => {
 });
 
 // API routes
-// TODO: Add rate limiting before multi-user support (express-rate-limit)
 app.use('/api/v1', authMiddleware);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/jobs', jobsRouter);

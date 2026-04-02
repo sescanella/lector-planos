@@ -6,3 +6,7 @@ dist
 .braingrid
 .claude
 .cursor
+samples
+scripts
+coverage
+frontend

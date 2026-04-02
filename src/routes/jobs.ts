@@ -23,6 +23,9 @@ const upload = multer({
       cb(null, `upload-${uniqueSuffix}${path.extname(file.originalname)}`);
     },
   }),
+  fileFilter: (_req, file, cb) => {
+    cb(null, file.mimetype === 'application/pdf');
+  },
   limits: { fileSize: MAX_FILE_SIZE, files: MAX_FILES_PER_JOB },
 });
 
@@ -42,10 +45,6 @@ router.post('/', async (req: Request, res: Response) => {
       res.status(500).json({ error: 'internal_error', message: 'Database not available' });
       return;
     }
-
-    // TODO: Implement webhook allowlist (WEBHOOK_ALLOWED_DOMAINS) before enabling webhooks
-    // Webhook URL is accepted but ignored until allowlist is in place
-    const _webhookUrl = (req.body || {}).webhook_url; // eslint-disable-line @typescript-eslint/no-unused-vars
 
     const { rows } = await pool.query(
       `INSERT INTO extraction_job (webhook_url) VALUES ($1) RETURNING job_id, status, created_at, webhook_url`,
