@@ -10,7 +10,7 @@ const router = Router();
 const exportLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  keyGenerator: (req) => req.header('X-API-Key') || req.ip || 'unknown',
+  keyGenerator: (req) => req.ip || 'unknown',
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'rate_limited', message: 'Export rate limit exceeded. Maximum 5 exports per 15 minutes.' },
@@ -59,11 +59,11 @@ router.post('/:jobId/export', exportLimiter, async (req: Request, res: Response)
 
     const includeConfidence = req.body?.include_confidence === true;
 
-    // Idempotency: try insert, on conflict return existing
+    // Idempotency: try insert, on conflict with partial unique index return existing
     const { rows: insertRows } = await pool.query(
       `INSERT INTO excel_export (job_id, spool_count, include_confidence)
        VALUES ($1, $2, $3)
-       ON CONFLICT ON CONSTRAINT idx_excel_export_inflight DO NOTHING
+       ON CONFLICT (job_id) WHERE status IN ('pending', 'processing') DO NOTHING
        RETURNING export_id, job_id, status, spool_count, include_confidence, created_at`,
       [jobId, spoolCount, includeConfidence]
     );
@@ -79,6 +79,12 @@ router.post('/:jobId/export', exportLimiter, async (req: Request, res: Response)
         });
       } catch (err) {
         console.error(`Could not queue excel generation for export ${exportRow.export_id}:`, err);
+        await pool.query(
+          `UPDATE excel_export SET status = 'failed', error_message = 'Failed to enqueue job' WHERE export_id = $1`,
+          [exportRow.export_id]
+        );
+        res.status(500).json({ error: 'internal_error', message: 'Failed to queue export generation' });
+        return;
       }
 
       res.status(202).json(exportRow);
@@ -205,6 +211,16 @@ router.get('/:jobId/export', async (req: Request, res: Response) => {
     const jobId = req.params.jobId as string;
     if (!isValidUUID(jobId)) {
       res.status(400).json({ error: 'validation_error', message: 'Invalid job ID format' });
+      return;
+    }
+
+    // Verify job exists (consistent with POST and GET /:exportId)
+    const { rows: jobRows } = await pool.query(
+      'SELECT job_id FROM extraction_job WHERE job_id = $1',
+      [jobId]
+    );
+    if (jobRows.length === 0) {
+      res.status(404).json({ error: 'not_found', message: 'Job not found', resource_id: jobId });
       return;
     }
 

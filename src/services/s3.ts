@@ -41,6 +41,7 @@ export async function uploadPdf(
         Key: key,
         Body: body,
         ContentType: 'application/pdf',
+        ServerSideEncryption: 'AES256',
       },
     });
     await upload.done();
@@ -50,6 +51,7 @@ export async function uploadPdf(
       Key: key,
       Body: body,
       ContentType: 'application/pdf',
+      ServerSideEncryption: 'AES256',
     }));
   }
 
@@ -130,6 +132,7 @@ export async function uploadPageImage(
         Key: key,
         Body: imageBuffer,
         ContentType: CONTENT_TYPES[format],
+        ServerSideEncryption: 'AES256',
       }));
       console.log(`S3 upload page image: ${key} (${imageBuffer.length} bytes)`);
       return key;
@@ -206,14 +209,15 @@ export async function getExportPresignedUrl(
   filename: string
 ): Promise<string> {
   const s3 = getClient();
+  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
   const url = await getSignedUrl(
     s3,
     new GetObjectCommand({
       Bucket: env.S3_BUCKET_NAME,
       Key: s3Key,
-      ResponseContentDisposition: `attachment; filename="${filename}"`,
+      ResponseContentDisposition: `attachment; filename="${safeFilename}"`,
     }),
-    { expiresIn: 86400 } // 24 hours
+    { expiresIn: env.EXPORT_PRESIGNED_EXPIRY_SECS }
   );
   return url;
 }

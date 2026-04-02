@@ -33,6 +33,8 @@ export const env = {
   EXCEL_EXPORT_EXPIRY_DAYS: parseInt(process.env.EXCEL_EXPORT_EXPIRY_DAYS || '7', 10),
   // Webhook
   WEBHOOK_HMAC_SECRET: process.env.WEBHOOK_HMAC_SECRET || '',
+  // Presigned URL
+  EXPORT_PRESIGNED_EXPIRY_SECS: parseInt(process.env.EXPORT_PRESIGNED_EXPIRY_SECS || '14400', 10),
 };
 
 // Validate bounds on critical env vars
@@ -58,8 +60,20 @@ if (env.EXCEL_EXPORT_EXPIRY_DAYS < 1 || env.EXCEL_EXPORT_EXPIRY_DAYS > 30) {
 if (env.WEBHOOK_HMAC_SECRET && env.WEBHOOK_HMAC_SECRET.length < 32) {
   throw new Error('WEBHOOK_HMAC_SECRET must be at least 32 characters if set');
 }
+if (env.EXPORT_PRESIGNED_EXPIRY_SECS < 300 || env.EXPORT_PRESIGNED_EXPIRY_SECS > 86400) {
+  throw new Error(`Invalid EXPORT_PRESIGNED_EXPIRY_SECS: ${env.EXPORT_PRESIGNED_EXPIRY_SECS} (must be 300-86400)`);
+}
 
-// Fail fast in production if S3 is not configured
+// Fail fast in production if critical config is missing
+if (env.NODE_ENV === 'production' && !env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is required in production');
+}
+if (env.NODE_ENV === 'production' && !env.REDIS_URL) {
+  throw new Error('REDIS_URL is required in production');
+}
 if (env.NODE_ENV === 'production' && !env.S3_BUCKET_NAME) {
   throw new Error('S3_BUCKET_NAME is required in production');
+}
+if (env.NODE_ENV === 'production' && !env.API_KEY) {
+  throw new Error('API_KEY is required in production');
 }

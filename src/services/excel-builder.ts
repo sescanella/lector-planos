@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import * as fs from 'fs';
+import { stat } from 'fs/promises';
 
 // ── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -20,23 +20,46 @@ export interface ExcelBuildOptions {
   jobId: string;
 }
 
-// ── Constants ───────────────────────────────────────────────────────────────
+// ── Column Mappings: [displayName, jsonbKey] ───────────────────────────────
 
-const CAJETIN_FIELDS = [
-  'OT', 'OF', 'Tag Spool', 'Diametro', 'Cliente', 'Cliente Final', 'Linea', 'Revision',
+const CAJETIN_MAPPING: [string, string][] = [
+  ['OT', 'ot'],
+  ['OF', 'of'],
+  ['Tag Spool', 'tagSpool'],
+  ['Diámetro', 'diameter'],
+  ['Cliente', 'client'],
+  ['Cliente Final', 'endClient'],
+  ['Línea', 'line'],
+  ['Revisión', 'revision'],
 ];
 
-const MATERIALES_COLUMNS = [
-  'ITEM', 'DIAM.', 'CODIGO', 'DESCRIPCION', 'CANTIDAD', 'N COLADA', 'ORIGEN',
+const MATERIALES_MAPPING: [string, string][] = [
+  ['ITEM', 'item'],
+  ['DIAM.', 'diameter'],
+  ['CÓDIGO', 'code'],
+  ['DESCRIPCIÓN', 'description'],
+  ['CANTIDAD', 'quantity'],
+  ['N COLADA', 'heatNumber'],
+  ['ORIGEN', 'source'],
 ];
 
-const SOLDADURAS_COLUMNS = [
-  'N SOLD.', 'DIAM.', 'TIPO SOLD.', 'WPS', 'FECHA SOLDADURA', 'SOLDADOR',
-  'FECHA INSP. VISUAL', 'RESULTADO',
+const SOLDADURAS_MAPPING: [string, string][] = [
+  ['N SOLD.', 'weldNumber'],
+  ['DIAM.', 'diameter'],
+  ['TIPO SOLD.', 'weldType'],
+  ['WPS', 'wps'],
+  ['FECHA SOLDADURA', 'weldDate'],
+  ['SOLDADOR', 'welder'],
+  ['FECHA INSP. VISUAL', 'inspectionDate'],
+  ['RESULTADO', 'result'],
 ];
 
-const CORTES_COLUMNS = [
-  'N CORTE', 'DIAM.', 'LARGO', 'EXTREMO 1', 'EXTREMO 2',
+const CORTES_MAPPING: [string, string][] = [
+  ['N CORTE', 'cutNumber'],
+  ['DIAM.', 'diameter'],
+  ['LARGO', 'length'],
+  ['EXTREMO 1', 'end1'],
+  ['EXTREMO 2', 'end2'],
 ];
 
 const SHEET_NAME_MAX = 31;
@@ -52,42 +75,45 @@ function confidencePercent(score: number): number {
   return Math.round(score * 100);
 }
 
-function cellValue(val: any): string | number | null {
+function cellValue(val: unknown): string | number | null {
   if (val === null || val === undefined) return null;
-  return val;
+  if (typeof val === 'object') return JSON.stringify(val);
+  if (typeof val === 'string' || typeof val === 'number') return val;
+  return String(val);
 }
 
 function deduplicateSheetNames(names: string[]): string[] {
-  const counts = new Map<string, number>();
-  const result: string[] = [];
-
-  for (const raw of names) {
+  // Pass 1: sanitize + truncate, count occurrences per normalized key
+  const sanitized = names.map(raw => {
     let name = sanitizeSheetName(raw);
-
-    if (name.length > SHEET_NAME_MAX) {
-      name = name.substring(0, 28);
-    }
-
+    if (name.length > SHEET_NAME_MAX) name = name.substring(0, 28);
+    return name;
+  });
+  const freq = new Map<string, number>();
+  for (const name of sanitized) {
     const key = name.toLowerCase();
-    const count = counts.get(key) ?? 0;
-
-    if (count > 0 || names.filter(n => sanitizeSheetName(n).substring(0, name.length === 28 ? 28 : SHEET_NAME_MAX).toLowerCase() === key).length > 1) {
-      const suffix = `-${String(count + 1).padStart(2, '0')}`;
-      name = name.substring(0, SHEET_NAME_MAX - suffix.length) + suffix;
-    }
-
-    counts.set(key, count + 1);
-    result.push(name);
+    freq.set(key, (freq.get(key) ?? 0) + 1);
   }
 
-  return result;
+  // Pass 2: assign suffixes only to keys with duplicates
+  const counts = new Map<string, number>();
+  return sanitized.map(name => {
+    const key = name.toLowerCase();
+    if (freq.get(key)! > 1) {
+      const idx = (counts.get(key) ?? 0) + 1;
+      counts.set(key, idx);
+      const suffix = `-${String(idx).padStart(2, '0')}`;
+      return name.substring(0, SHEET_NAME_MAX - suffix.length) + suffix;
+    }
+    return name;
+  });
 }
 
 function boldRow(row: ExcelJS.Row): void {
   row.font = { bold: true };
 }
 
-function extractField(rawData: Record<string, any>, field: string): any {
+function extractField(rawData: Record<string, any>, field: string): unknown {
   // Try exact match first, then case-insensitive
   if (field in rawData) return rawData[field];
   const lower = field.toLowerCase();
@@ -112,8 +138,9 @@ export async function buildExcelWorkbook(
   // ── Resumen sheet ───────────────────────────────────────────────────────
   const resumen = workbook.addWorksheet('Resumen');
   const resumenColumns = [
-    'Spool', 'OT', 'OF', 'Tag Spool', 'Diametro', 'Cliente', 'Cliente Final',
-    'Linea', 'Revision', 'N Materiales', 'N Soldaduras', 'N Cortes',
+    'Spool',
+    ...CAJETIN_MAPPING.map(([display]) => display),
+    'N Materiales', 'N Soldaduras', 'N Cortes',
   ];
   if (options.includeConfidence) resumenColumns.push('Confianza (%)');
 
@@ -123,16 +150,9 @@ export async function buildExcelWorkbook(
 
   for (const spool of spools) {
     const meta = spool.metadata?.rawData ?? {};
-    const values: any[] = [
+    const values: (string | number | null)[] = [
       spool.spoolNumber,
-      cellValue(extractField(meta, 'OT')),
-      cellValue(extractField(meta, 'OF')),
-      cellValue(extractField(meta, 'Tag Spool')),
-      cellValue(extractField(meta, 'Diametro')),
-      cellValue(extractField(meta, 'Cliente')),
-      cellValue(extractField(meta, 'Cliente Final')),
-      cellValue(extractField(meta, 'Linea')),
-      cellValue(extractField(meta, 'Revision')),
+      ...CAJETIN_MAPPING.map(([, key]) => cellValue(extractField(meta, key))),
       spool.materials.length,
       spool.welds.length,
       spool.cuts.length,
@@ -154,13 +174,13 @@ export async function buildExcelWorkbook(
     const sheet = workbook.addWorksheet(sheetNames[i]);
 
     // Section: Cajetin
-    const cajetinHeader = sheet.addRow(['Cajetin']);
+    const cajetinHeader = sheet.addRow(['Cajetín']);
     boldRow(cajetinHeader);
     cajetinHeader.commit();
 
     const meta = spool.metadata?.rawData ?? {};
-    for (const field of CAJETIN_FIELDS) {
-      sheet.addRow([field, cellValue(extractField(meta, field))]).commit();
+    for (const [display, key] of CAJETIN_MAPPING) {
+      sheet.addRow([display, cellValue(extractField(meta, key))]).commit();
     }
     if (options.includeConfidence && spool.metadata) {
       sheet.addRow(['Confianza (%)', confidencePercent(spool.metadata.confidenceScore)]).commit();
@@ -170,33 +190,33 @@ export async function buildExcelWorkbook(
     sheet.addRow([]).commit();
 
     // Section: Materiales
-    writeSectionTable(sheet, 'Materiales', MATERIALES_COLUMNS, spool.materials, options.includeConfidence);
+    writeSectionTable(sheet, 'Materiales', MATERIALES_MAPPING, spool.materials, options.includeConfidence);
 
     // Blank separator
     sheet.addRow([]).commit();
 
     // Section: Soldaduras
-    writeSectionTable(sheet, 'Soldaduras', SOLDADURAS_COLUMNS, spool.welds, options.includeConfidence);
+    writeSectionTable(sheet, 'Soldaduras', SOLDADURAS_MAPPING, spool.welds, options.includeConfidence);
 
     // Blank separator
     sheet.addRow([]).commit();
 
     // Section: Cortes
-    writeSectionTable(sheet, 'Cortes', CORTES_COLUMNS, spool.cuts, options.includeConfidence);
+    writeSectionTable(sheet, 'Cortes', CORTES_MAPPING, spool.cuts, options.includeConfidence);
 
     sheet.commit();
   }
 
   await workbook.commit();
 
-  const stat = fs.statSync(outputPath);
-  return { fileSizeBytes: stat.size };
+  const fileStat = await stat(outputPath);
+  return { fileSizeBytes: fileStat.size };
 }
 
 function writeSectionTable(
   sheet: ExcelJS.Worksheet,
   sectionName: string,
-  columns: string[],
+  mapping: [string, string][],
   rows: Array<{ rawData: Record<string, any>; confidenceScore: number }>,
   includeConfidence: boolean
 ): void {
@@ -205,8 +225,8 @@ function writeSectionTable(
   boldRow(titleRow);
   titleRow.commit();
 
-  // Header row
-  const headerCols = [...columns];
+  // Header row (display names)
+  const headerCols = mapping.map(([display]) => display);
   if (includeConfidence) headerCols.push('Confianza (%)');
   const hRow = sheet.addRow(headerCols);
   boldRow(hRow);
@@ -218,7 +238,7 @@ function writeSectionTable(
   }
 
   for (const row of rows) {
-    const values: any[] = columns.map(col => cellValue(extractField(row.rawData, col)));
+    const values: (string | number | null)[] = mapping.map(([, key]) => cellValue(extractField(row.rawData, key)));
     if (includeConfidence) {
       values.push(confidencePercent(row.confidenceScore));
     }

@@ -43,7 +43,9 @@ async function updateExportStatus(
   }
   if (status === 'completed') {
     sets.push(`completed_at = NOW()`);
-    sets.push(`expires_at = NOW() + INTERVAL '${env.EXCEL_EXPORT_EXPIRY_DAYS} days'`);
+    sets.push(`expires_at = NOW() + make_interval(days => $${idx})`);
+    values.push(env.EXCEL_EXPORT_EXPIRY_DAYS);
+    idx++;
   }
 
   await pool.query(
@@ -56,7 +58,7 @@ async function querySpoolsForJob(jobId: string): Promise<SpoolExportData[]> {
   const pool = getPool();
   if (!pool) throw new Error('Database not available');
 
-  // Get all completed spools for the job
+  // Step 1: Get all completed spools for the job
   const { rows: spoolRows } = await pool.query(
     `SELECT s.spool_id, s.spool_number, s.confidence_score
      FROM spool s
@@ -66,34 +68,50 @@ async function querySpoolsForJob(jobId: string): Promise<SpoolExportData[]> {
     [jobId]
   );
 
-  const spools: SpoolExportData[] = [];
+  if (spoolRows.length === 0) return [];
 
-  for (const row of spoolRows) {
+  // Step 2: Batch-fetch all child data in 4 parallel queries
+  const spoolIds = spoolRows.map(r => r.spool_id);
+
+  const [materialsRes, weldsRes, cutsRes, metadataRes] = await Promise.all([
+    pool.query('SELECT spool_id, raw_data, confidence_score FROM material WHERE spool_id = ANY($1)', [spoolIds]),
+    pool.query('SELECT spool_id, raw_data, confidence_score FROM spool_union WHERE spool_id = ANY($1)', [spoolIds]),
+    pool.query('SELECT spool_id, raw_data, confidence_score FROM cut WHERE spool_id = ANY($1)', [spoolIds]),
+    pool.query('SELECT spool_id, raw_data, confidence_score FROM spool_metadata WHERE spool_id = ANY($1)', [spoolIds]),
+  ]);
+
+  // Step 3: Group results by spool_id
+  const materialsBySpool = groupBySpoolId(materialsRes.rows);
+  const weldsBySpool = groupBySpoolId(weldsRes.rows);
+  const cutsBySpool = groupBySpoolId(cutsRes.rows);
+  const metadataBySpool = groupBySpoolId(metadataRes.rows);
+
+  // Step 4: Assemble SpoolExportData array
+  return spoolRows.map(row => {
     const spoolId = row.spool_id;
+    const metaRow = metadataBySpool.get(spoolId)?.[0];
 
-    // Query all child tables in parallel
-    const [materialsRes, weldsRes, cutsRes, metadataRes] = await Promise.all([
-      pool.query('SELECT raw_data, confidence_score FROM material WHERE spool_id = $1', [spoolId]),
-      pool.query('SELECT raw_data, confidence_score FROM spool_union WHERE spool_id = $1', [spoolId]),
-      pool.query('SELECT raw_data, confidence_score FROM cut WHERE spool_id = $1', [spoolId]),
-      pool.query('SELECT raw_data, confidence_score FROM spool_metadata WHERE spool_id = $1 LIMIT 1', [spoolId]),
-    ]);
-
-    const metadata = metadataRes.rows.length > 0
-      ? { rawData: metadataRes.rows[0].raw_data, confidenceScore: metadataRes.rows[0].confidence_score }
-      : null;
-
-    spools.push({
+    return {
       spoolNumber: row.spool_number || 'Sin-Nombre',
       confidenceScore: row.confidence_score ?? 0,
-      metadata,
-      materials: materialsRes.rows.map(r => ({ rawData: r.raw_data, confidenceScore: r.confidence_score })),
-      welds: weldsRes.rows.map(r => ({ rawData: r.raw_data, confidenceScore: r.confidence_score })),
-      cuts: cutsRes.rows.map(r => ({ rawData: r.raw_data, confidenceScore: r.confidence_score })),
-    });
-  }
+      metadata: metaRow
+        ? { rawData: metaRow.raw_data, confidenceScore: metaRow.confidence_score }
+        : null,
+      materials: (materialsBySpool.get(spoolId) ?? []).map(r => ({ rawData: r.raw_data, confidenceScore: r.confidence_score })),
+      welds: (weldsBySpool.get(spoolId) ?? []).map(r => ({ rawData: r.raw_data, confidenceScore: r.confidence_score })),
+      cuts: (cutsBySpool.get(spoolId) ?? []).map(r => ({ rawData: r.raw_data, confidenceScore: r.confidence_score })),
+    };
+  });
+}
 
-  return spools;
+function groupBySpoolId(rows: Array<{ spool_id: string; [key: string]: any }>): Map<string, typeof rows> {
+  const map = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const arr = map.get(row.spool_id);
+    if (arr) arr.push(row);
+    else map.set(row.spool_id, [row]);
+  }
+  return map;
 }
 
 async function getWebhookUrl(jobId: string): Promise<string | null> {
@@ -117,6 +135,16 @@ export function createExcelGenerationProcessor(): (job: Job<ExcelGenerationJobDa
 
     try {
       // Step 1: Set status to processing (handles crash recovery — AC-37)
+      // Guard: never overwrite a 'completed' export on retry
+      const pool = getPool();
+      if (!pool) throw new Error('Database not available');
+      const { rows: statusRows } = await pool.query(
+        'SELECT status FROM excel_export WHERE export_id = $1', [exportId]
+      );
+      if (statusRows[0]?.status === 'completed') {
+        console.log(`Export ${exportId} already completed — skipping retry`);
+        return;
+      }
       await updateExportStatus(exportId, 'processing');
 
       // Step 2-3: Query spools and their child data
@@ -138,17 +166,21 @@ export function createExcelGenerationProcessor(): (job: Job<ExcelGenerationJobDa
       // Step 8: Delete temp file
       await safeDeleteTempFile(tempPath);
 
-      // Step 9: Fire webhook
-      const webhookUrl = await getWebhookUrl(jobId);
-      const createdAt = await getExportCreatedAt(exportId);
-      await notifyExportCompletion(webhookUrl, {
-        export_id: exportId,
-        job_id: jobId,
-        spool_count: spools.length,
-        file_size_bytes: fileSizeBytes,
-        created_at: createdAt,
-        completed_at: new Date().toISOString(),
-      });
+      // Step 9: Fire webhook (failure here must NOT invalidate the export)
+      try {
+        const webhookUrl = await getWebhookUrl(jobId);
+        const createdAt = await getExportCreatedAt(exportId);
+        await notifyExportCompletion(webhookUrl, {
+          export_id: exportId,
+          job_id: jobId,
+          spool_count: spools.length,
+          file_size_bytes: fileSizeBytes,
+          created_at: createdAt,
+          completed_at: new Date().toISOString(),
+        });
+      } catch (webhookErr) {
+        console.error(`Webhook notification failed (export still valid): ${exportId}`, webhookErr);
+      }
 
       console.log(`Excel export completed: ${exportId} (${spools.length} spools, ${fileSizeBytes} bytes)`);
     } catch (err) {

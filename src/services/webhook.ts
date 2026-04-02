@@ -1,8 +1,10 @@
 import { createHmac } from 'crypto';
-import { env } from '../config/env.js';
+import { resolve4, resolve6 } from 'dns/promises';
+import { env } from '../config/env';
 
 const RETRY_DELAYS = [1000, 5000, 30000]; // 1s, 5s, 30s
 const TIMEOUT = 10000; // 10 seconds
+const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|169\.254\.\d+\.\d+|\[::1\]|0\.0\.0\.0)$/i;
 
 // --- Payload types ---
 
@@ -38,10 +40,48 @@ type WebhookPayload = JobWebhookPayload | ExportReadyPayload | ExportFailedPaylo
 
 // --- HMAC signing ---
 
-function signPayload(body: string): string {
+function signPayload(body: string, timestamp: number): string {
   const hmac = createHmac('sha256', env.WEBHOOK_HMAC_SECRET);
-  hmac.update(body);
+  hmac.update(`${timestamp}.${body}`);
   return 'sha256=' + hmac.digest('hex');
+}
+
+function isBlockedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^\[|\]$/g, '');
+    if (BLOCKED_HOSTS.test(host)) return true;
+    // Block IPv6 private ranges: fc00::/7 (includes fd00::/8), fe80::/10
+    if (/^[fF][cdCD]/i.test(host) || /^[fF][eE][89aAbB]/i.test(host)) return true;
+    return parsed.protocol !== 'https:';
+  } catch {
+    return true;
+  }
+}
+
+const PRIVATE_IP_PATTERNS = [
+  /^127\./, /^10\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[01])\./, /^169\.254\./, /^0\./,
+];
+
+function isPrivateIp(ip: string): boolean {
+  return PRIVATE_IP_PATTERNS.some(p => p.test(ip));
+}
+
+function isPrivateIpv6(ip: string): boolean {
+  const lower = ip.toLowerCase();
+  return lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe8');
+}
+
+async function hasPrivateResolution(hostname: string): Promise<boolean> {
+  try {
+    const ipv4s = await resolve4(hostname).catch(() => []);
+    if (ipv4s.some(isPrivateIp)) return true;
+    const ipv6s = await resolve6(hostname).catch(() => []);
+    if (ipv6s.some(isPrivateIpv6)) return true;
+    return false;
+  } catch {
+    return true; // Fail closed: unresolvable hosts are blocked
+  }
 }
 
 // --- Helpers ---
@@ -70,13 +110,28 @@ export async function sendWebhook(
     return false;
   }
 
+  if (isBlockedUrl(webhookUrl)) {
+    console.warn(`Webhook blocked: URL targets private/non-HTTPS host: ${sanitizeUrl(webhookUrl)}`);
+    return false;
+  }
+
+  // DNS rebinding protection: resolve hostname and verify IPs are public
+  const hostname = new URL(webhookUrl).hostname;
+  if (await hasPrivateResolution(hostname)) {
+    console.warn(`Webhook blocked: DNS resolves to private IP: ${sanitizeUrl(webhookUrl)}`);
+    return false;
+  }
+
   const safeUrl = sanitizeUrl(webhookUrl);
   const body = JSON.stringify(payload);
-  const signature = signPayload(body);
   const jobId = getPayloadJobId(payload);
 
   for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
     try {
+      // Fresh timestamp+signature per attempt for replay protection
+      const timestamp = Math.floor(Date.now() / 1000);
+      const signature = signPayload(body, timestamp);
+
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), TIMEOUT);
 
@@ -85,6 +140,7 @@ export async function sendWebhook(
         headers: {
           'Content-Type': 'application/json',
           'X-Webhook-Signature': signature,
+          'X-Webhook-Timestamp': String(timestamp),
         },
         body,
         signal: controller.signal,
