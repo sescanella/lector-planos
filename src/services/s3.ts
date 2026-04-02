@@ -12,7 +12,7 @@ import { env } from '../config/env';
 
 let client: S3Client | null = null;
 
-function getClient(): S3Client {
+export function getClient(): S3Client {
   if (!client) {
     client = new S3Client({ region: env.AWS_REGION });
   }
@@ -74,6 +74,19 @@ export async function downloadPdf(
   }
 
   console.log(`S3 download: ${key}`);
+  return response.Body as Readable;
+}
+
+export async function downloadByKey(s3Key: string): Promise<Readable> {
+  const s3 = getClient();
+  const response = await s3.send(new GetObjectCommand({
+    Bucket: env.S3_BUCKET_NAME,
+    Key: s3Key,
+  }));
+  if (!response.Body) {
+    throw new Error(`S3 object not found: ${s3Key}`);
+  }
+  console.log(`S3 download by key: ${s3Key}`);
   return response.Body as Readable;
 }
 

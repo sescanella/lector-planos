@@ -113,6 +113,35 @@ router.post('/:spoolId/corrections', async (req: Request, res: Response) => {
       return;
     }
 
+    // Length validation
+    const MAX_VALUE_LENGTH = 10000; // 10KB max per value
+    if (typeof original_value === 'string' && original_value.length > MAX_VALUE_LENGTH) {
+      res.status(400).json({
+        error: 'validation_error',
+        message: 'original_value too long',
+        details: [{ field: 'original_value', message: `Maximum ${MAX_VALUE_LENGTH} characters` }],
+      });
+      return;
+    }
+    if (typeof corrected_value === 'string' && corrected_value.length > MAX_VALUE_LENGTH) {
+      res.status(400).json({
+        error: 'validation_error',
+        message: 'corrected_value too long',
+        details: [{ field: 'corrected_value', message: `Maximum ${MAX_VALUE_LENGTH} characters` }],
+      });
+      return;
+    }
+
+    // Validate field_id as UUID if provided
+    if (field_id && !isValidUUID(field_id)) {
+      res.status(400).json({
+        error: 'validation_error',
+        message: 'Invalid field_id format',
+        details: [{ field: 'field_id', message: 'Must be a valid UUID' }],
+      });
+      return;
+    }
+
     if (original_value === undefined || corrected_value === undefined) {
       res.status(400).json({
         error: 'validation_error',
