@@ -28,6 +28,11 @@ export const env = {
   PDF_TIMEOUT_MS: parseInt(process.env.PDF_TIMEOUT_MS || '30000', 10),
   // Worker
   WORKER_CONCURRENCY: parseInt(process.env.WORKER_CONCURRENCY || '5', 10),
+  // Excel Export
+  EXCEL_WORKER_CONCURRENCY: parseInt(process.env.EXCEL_WORKER_CONCURRENCY || '2', 10),
+  EXCEL_EXPORT_EXPIRY_DAYS: parseInt(process.env.EXCEL_EXPORT_EXPIRY_DAYS || '7', 10),
+  // Webhook
+  WEBHOOK_HMAC_SECRET: process.env.WEBHOOK_HMAC_SECRET || '',
 };
 
 // Validate bounds on critical env vars
@@ -42,6 +47,16 @@ if (env.WORKER_CONCURRENCY < 1 || env.WORKER_CONCURRENCY > 20) {
 }
 if (env.DB_POOL_MAX < 1 || env.DB_POOL_MAX > 100) {
   throw new Error(`Invalid DB_POOL_MAX: ${env.DB_POOL_MAX} (must be 1-100)`);
+}
+
+if (env.EXCEL_WORKER_CONCURRENCY < 1 || env.EXCEL_WORKER_CONCURRENCY > 5) {
+  throw new Error(`Invalid EXCEL_WORKER_CONCURRENCY: ${env.EXCEL_WORKER_CONCURRENCY} (must be 1-5)`);
+}
+if (env.EXCEL_EXPORT_EXPIRY_DAYS < 1 || env.EXCEL_EXPORT_EXPIRY_DAYS > 30) {
+  throw new Error(`Invalid EXCEL_EXPORT_EXPIRY_DAYS: ${env.EXCEL_EXPORT_EXPIRY_DAYS} (must be 1-30)`);
+}
+if (env.WEBHOOK_HMAC_SECRET && env.WEBHOOK_HMAC_SECRET.length < 32) {
+  throw new Error('WEBHOOK_HMAC_SECRET must be at least 32 characters if set');
 }
 
 // Fail fast in production if S3 is not configured
