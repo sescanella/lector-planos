@@ -25,7 +25,7 @@ router.post('/:jobId/export', exportLimiter, async (req: Request, res: Response)
       return;
     }
 
-    const { jobId } = req.params;
+    const jobId = req.params.jobId as string;
     if (!isValidUUID(jobId)) {
       res.status(400).json({ error: 'validation_error', message: 'Invalid job ID format' });
       return;
@@ -116,7 +116,8 @@ router.get('/:jobId/export/:exportId', async (req: Request, res: Response) => {
       return;
     }
 
-    const { jobId, exportId } = req.params;
+    const jobId = req.params.jobId as string;
+    const exportId = req.params.exportId as string;
     if (!isValidUUID(jobId) || !isValidUUID(exportId)) {
       res.status(400).json({ error: 'validation_error', message: 'Invalid ID format' });
       return;
@@ -201,7 +202,7 @@ router.get('/:jobId/export', async (req: Request, res: Response) => {
       return;
     }
 
-    const { jobId } = req.params;
+    const jobId = req.params.jobId as string;
     if (!isValidUUID(jobId)) {
       res.status(400).json({ error: 'validation_error', message: 'Invalid job ID format' });
       return;
