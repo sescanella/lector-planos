@@ -11,6 +11,7 @@ import { checkS3Connection } from './services/s3';
 import jobsRouter from './routes/jobs';
 import spoolsRouter from './routes/spools';
 import adminRouter from './routes/admin';
+import authRouter from './routes/auth';
 import { authMiddleware } from './middleware/auth';
 import { createPdfExtractionProcessor } from './workers/pdf-extraction';
 import { createAiExtractionProcessor } from './workers/ai-extraction';
@@ -33,7 +34,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
+      styleSrc: ["'self'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:"],
       connectSrc: ["'self'"],
@@ -78,6 +79,7 @@ app.get('/health', async (_req, res) => {
 // API routes
 // TODO: Add rate limiting before multi-user support (express-rate-limit)
 app.use('/api/v1', authMiddleware);
+app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/jobs', jobsRouter);
 app.use('/api/v1/spools', spoolsRouter);
 app.use('/api/v1/jobs', exportRouter);

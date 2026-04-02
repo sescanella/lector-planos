@@ -315,7 +315,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/jobs/:jobId/spools — List all spools for a job
+// GET /api/v1/jobs/:jobId/spools — List all spools for a job (paginated)
 router.get('/:jobId/spools', async (req: Request, res: Response) => {
   try {
     const pool = getPool();
@@ -330,6 +330,31 @@ router.get('/:jobId/spools', async (req: Request, res: Response) => {
       return;
     }
 
+    // Parse and validate pagination params
+    const rawPage = parseInt((req.query.page as string) || '1', 10);
+    const rawLimit = parseInt((req.query.limit as string) || '20', 10);
+
+    if (isNaN(rawPage) || rawPage < 1) {
+      res.status(400).json({
+        error: 'validation_error',
+        message: 'Invalid pagination parameters',
+        details: [{ field: 'page', message: 'page must be an integer >= 1' }],
+      });
+      return;
+    }
+    if (isNaN(rawLimit) || rawLimit < 1 || rawLimit > 100) {
+      res.status(400).json({
+        error: 'validation_error',
+        message: 'Invalid pagination parameters',
+        details: [{ field: 'limit', message: 'limit must be an integer between 1 and 100' }],
+      });
+      return;
+    }
+
+    const page = rawPage;
+    const limit = rawLimit;
+    const offset = (page - 1) * limit;
+
     // Verify job exists
     const { rows: jobRows } = await pool.query(
       'SELECT job_id FROM extraction_job WHERE job_id = $1',
@@ -340,16 +365,35 @@ router.get('/:jobId/spools', async (req: Request, res: Response) => {
       return;
     }
 
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM spool s
+       JOIN pdf_file f ON f.file_id = s.file_id
+       WHERE f.job_id = $1`,
+      [jobId]
+    );
+    const total: number = countRows[0].total;
+    const total_pages = Math.ceil(total / limit);
+
     const { rows: spoolRows } = await pool.query(
       `SELECT s.spool_id, s.spool_number, s.confidence_score, s.extraction_status, s.file_id, s.created_at
        FROM spool s
        JOIN pdf_file f ON f.file_id = s.file_id
        WHERE f.job_id = $1
-       ORDER BY s.spool_number ASC`,
-      [jobId]
+       ORDER BY s.spool_number ASC
+       LIMIT $2 OFFSET $3`,
+      [jobId, limit, offset]
     );
 
-    res.json({ spools: spoolRows });
+    res.json({
+      spools: spoolRows,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages,
+      },
+    });
   } catch (err) {
     console.error('Error listing spools for job:', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'internal_error', message: 'An unexpected error occurred' });
