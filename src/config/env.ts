@@ -105,7 +105,7 @@ if (env.VISION_MAX_COST_PER_JOB_USD <= 0) {
 }
 
 if (env.CORS_ORIGIN === '*' && env.NODE_ENV === 'production') {
-  console.warn('WARNING: CORS_ORIGIN is set to wildcard (*) in production. Set CORS_ORIGIN to your frontend domain.');
+  throw new Error('CORS_ORIGIN must not be wildcard (*) in production. Set CORS_ORIGIN to your frontend domain.');
 }
 
 // Fail fast in production if critical config is missing

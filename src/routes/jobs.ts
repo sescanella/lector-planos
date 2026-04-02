@@ -252,6 +252,110 @@ router.post('/:jobId/upload', upload.array('files', MAX_FILES_PER_JOB), async (r
   }
 });
 
+// GET /api/v1/jobs — List all extraction jobs (paginated)
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    if (!pool) {
+      res.status(500).json({ error: 'internal_error', message: 'Database not available' });
+      return;
+    }
+
+    // Parse and validate pagination params
+    const rawPage = parseInt((req.query.page as string) || '1', 10);
+    const rawLimit = parseInt((req.query.limit as string) || '20', 10);
+
+    if (isNaN(rawPage) || rawPage < 1) {
+      res.status(400).json({
+        error: 'validation_error',
+        message: 'Invalid pagination parameters',
+        details: [{ field: 'page', message: 'page must be an integer >= 1' }],
+      });
+      return;
+    }
+    if (isNaN(rawLimit) || rawLimit < 1 || rawLimit > 100) {
+      res.status(400).json({
+        error: 'validation_error',
+        message: 'Invalid pagination parameters',
+        details: [{ field: 'limit', message: 'limit must be an integer between 1 and 100' }],
+      });
+      return;
+    }
+
+    const page = rawPage;
+    const limit = rawLimit;
+    const offset = (page - 1) * limit;
+
+    const { rows: countRows } = await pool.query(
+      'SELECT COUNT(*)::int AS total FROM extraction_job'
+    );
+    const total: number = countRows[0].total;
+    const total_pages = Math.ceil(total / limit);
+
+    const { rows: jobs } = await pool.query(
+      `SELECT job_id, status, created_at, completed_at, file_count, processed_count, webhook_url
+       FROM extraction_job
+       ORDER BY created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    res.json({
+      jobs,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages,
+      },
+    });
+  } catch (err) {
+    console.error('Error listing jobs:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'internal_error', message: 'An unexpected error occurred' });
+  }
+});
+
+// GET /api/v1/jobs/:jobId/spools — List all spools for a job
+router.get('/:jobId/spools', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    if (!pool) {
+      res.status(500).json({ error: 'internal_error', message: 'Database not available' });
+      return;
+    }
+
+    const jobId = req.params.jobId as string;
+    if (!isValidUUID(jobId)) {
+      res.status(400).json({ error: 'validation_error', message: 'Invalid job ID format' });
+      return;
+    }
+
+    // Verify job exists
+    const { rows: jobRows } = await pool.query(
+      'SELECT job_id FROM extraction_job WHERE job_id = $1',
+      [jobId]
+    );
+    if (jobRows.length === 0) {
+      res.status(404).json({ error: 'not_found', message: 'Job not found', resource_id: jobId });
+      return;
+    }
+
+    const { rows: spoolRows } = await pool.query(
+      `SELECT s.spool_id, s.spool_number, s.confidence_score, s.extraction_status, s.file_id, s.created_at
+       FROM spool s
+       JOIN pdf_file f ON f.file_id = s.file_id
+       WHERE f.job_id = $1
+       ORDER BY s.spool_number ASC`,
+      [jobId]
+    );
+
+    res.json({ spools: spoolRows });
+  } catch (err) {
+    console.error('Error listing spools for job:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'internal_error', message: 'An unexpected error occurred' });
+  }
+});
+
 // GET /api/v1/jobs/:jobId — Get job status
 router.get('/:jobId', async (req: Request, res: Response) => {
   try {
@@ -278,7 +382,7 @@ router.get('/:jobId', async (req: Request, res: Response) => {
     }
 
     const { rows: fileRows } = await pool.query(
-      'SELECT file_id, original_filename AS filename, status, page_count, failed_pages FROM pdf_file WHERE job_id = $1 ORDER BY uploaded_at',
+      'SELECT file_id, original_filename AS filename, status, page_count, failed_pages, file_size_bytes FROM pdf_file WHERE job_id = $1 ORDER BY uploaded_at',
       [jobId]
     );
 
