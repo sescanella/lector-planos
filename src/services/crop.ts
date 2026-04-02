@@ -209,8 +209,8 @@ export async function cropRegionsFromPdf(
       timeoutId = setTimeout(() => reject(new CropTimeoutError()), CROP_TIMEOUT_MS);
     });
 
-    const cropAllPromise = (async () => {
-      for (const region of regions) {
+    const cropAllPromise = Promise.all(
+      regions.map(async (region) => {
         const bbox = bboxToPixels(region, pageDims.widthPts, pageDims.heightPts);
         const outputPrefix = path.join(tmpDir, region.id);
 
@@ -259,9 +259,13 @@ export async function cropRegionsFromPdf(
           );
         }
 
-        results.set(region.id, buffer);
+        return { id: region.id, buffer };
+      }),
+    ).then((entries) => {
+      for (const { id, buffer } of entries) {
+        results.set(id, buffer);
       }
-    })();
+    });
 
     await Promise.race([cropAllPromise, timeoutPromise]);
   } finally {

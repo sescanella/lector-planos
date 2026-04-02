@@ -162,6 +162,7 @@ async function uploadCropsToS3(
         Key: key,
         Body: buffer,
         ContentType: 'image/png',
+        ServerSideEncryption: 'AES256',
       }));
     })
   );
