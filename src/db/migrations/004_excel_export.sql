@@ -1,5 +1,10 @@
 -- 004_excel_export.sql
 -- Add excel_export table for tracking Excel generation jobs
+--
+-- DEPLOYMENT CHECKLIST: S3 lifecycle rule required
+-- Prefix: exports/
+-- Expiration: 7 days (matches EXCEL_EXPORT_EXPIRY_DAYS default)
+-- Scope: current versions only
 
 CREATE TABLE IF NOT EXISTS excel_export (
   export_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

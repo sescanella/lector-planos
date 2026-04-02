@@ -10,6 +10,9 @@ import jobsRouter from './routes/jobs';
 import spoolsRouter from './routes/spools';
 import { authMiddleware } from './middleware/auth';
 import { createPdfExtractionProcessor } from './workers/pdf-extraction';
+import { createExcelGenerationProcessor } from './workers/excel-generation';
+import { startExcelWorker } from './services/queue';
+import exportRouter from './routes/export';
 
 const app = express();
 
@@ -54,6 +57,7 @@ app.get('/health', async (_req, res) => {
 app.use('/api/v1', authMiddleware);
 app.use('/api/v1/jobs', jobsRouter);
 app.use('/api/v1/spools', spoolsRouter);
+app.use('/api/v1/jobs', exportRouter);
 
 // Multer error-handling middleware
 app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
@@ -88,6 +92,9 @@ async function start() {
 
   // Start PDF extraction worker (REQ-10 pipeline)
   startWorker(createPdfExtractionProcessor());
+
+  // Start Excel generation worker (REQ-12 pipeline)
+  startExcelWorker(createExcelGenerationProcessor());
 
   const server = app.listen(env.PORT, () => {
     console.log(`BlueprintAI server listening on port ${env.PORT}`);
