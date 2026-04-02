@@ -4,16 +4,20 @@ import { env } from '../config/env';
 
 let queueConnection: IORedis | null = null;
 let workerConnection: IORedis | null = null;
+let aiWorkerConnection: IORedis | null = null;
 let excelWorkerConnection: IORedis | null = null;
 let queue: Queue | null = null;
 let worker: Worker | null = null;
+let aiWorker: Worker | null = null;
 let excelWorker: Worker | null = null;
 let aiExtractionQueue: Queue | null = null;
+let aiDlqQueue: Queue | null = null;
 let dlqQueue: Queue | null = null;
 let excelGenerationQueue: Queue | null = null;
 
 const QUEUE_NAME = 'pdf-extraction';
 const AI_EXTRACTION_QUEUE = 'ai-extraction';
+const AI_DLQ_QUEUE = 'ai-extraction-dlq';
 const DLQ_QUEUE = 'pdf-extraction-dlq';
 const EXCEL_GENERATION_QUEUE = 'excel-generation';
 const CONCURRENCY = env.WORKER_CONCURRENCY;
@@ -73,6 +77,47 @@ export function startWorker(processor: ProcessorFn): Worker | null {
   return worker;
 }
 
+// --- AI extraction (REQ-11) ---
+
+export interface AiExtractionJobData {
+  spoolId: string;
+  imageS3Key: string;
+  imageFormat: string;
+  pageNumber: number;
+  fileId: string;
+  jobId: string;
+}
+
+export type AiProcessorFn = (job: Job<AiExtractionJobData>) => Promise<void>;
+
+export function startAiWorker(processor: AiProcessorFn): Worker | null {
+  if (!env.REDIS_URL) return null;
+  if (aiWorker) return aiWorker;
+
+  aiWorkerConnection = createConnection()!;
+
+  aiWorker = new Worker<AiExtractionJobData>(
+    AI_EXTRACTION_QUEUE,
+    processor,
+    {
+      connection: aiWorkerConnection,
+      concurrency: env.AI_WORKER_CONCURRENCY,
+      lockDuration: 180_000, // 3 min — prevents job theft during long API calls
+    }
+  );
+
+  aiWorker.on('completed', (job) => {
+    console.log(`AI job completed: ${job.id} (spool: ${job.data.spoolId})`);
+  });
+
+  aiWorker.on('failed', (job, err) => {
+    console.error(`AI job failed: ${job?.id} — ${err.message}`);
+  });
+
+  console.log(`BullMQ AI worker started: queue=${AI_EXTRACTION_QUEUE}, concurrency=${env.AI_WORKER_CONCURRENCY}`);
+  return aiWorker;
+}
+
 export async function addExtractionJob(data: ExtractionJobData): Promise<string> {
   const q = getQueue();
   if (!q) throw new Error('Queue not initialized — REDIS_URL not set');
@@ -85,15 +130,6 @@ export async function addExtractionJob(data: ExtractionJobData): Promise<string>
 
   console.log(`Queued extraction job: ${job.id} (file: ${data.fileId})`);
   return job.id!;
-}
-
-export interface AiExtractionJobData {
-  spoolId: string;
-  imageS3Key: string;
-  imageFormat: string;
-  pageNumber: number;
-  fileId: string;
-  jobId: string;
 }
 
 function getAiExtractionQueue(): Queue | null {
@@ -120,8 +156,9 @@ export async function addAiExtractionJob(data: AiExtractionJobData): Promise<str
 
   const job = await q.add('extract-ai', data, {
     attempts: 3,
-    backoff: { type: 'exponential', delay: 2000 },
+    backoff: { type: 'exponential', delay: 30000 },
     removeOnComplete: { age: 7 * 24 * 3600 },
+    removeOnFail: { age: 30 * 24 * 3600 }, // keep failed jobs 30 days
   });
 
   console.log(`Queued AI extraction job: ${job.id} (spool: ${data.spoolId})`);
@@ -137,7 +174,47 @@ export async function addToDlq(data: ExtractionJobData): Promise<void> {
   console.log(`Moved to DLQ: file ${data.fileId}`);
 }
 
-// --- Excel generation queue ---
+export function getAiDlqQueue(): Queue | null {
+  if (!env.REDIS_URL) return null;
+  if (!aiDlqQueue) {
+    if (!queueConnection) queueConnection = createConnection()!;
+    aiDlqQueue = new Queue(AI_DLQ_QUEUE, { connection: queueConnection });
+  }
+  return aiDlqQueue;
+}
+
+export async function addToAiDlq(data: AiExtractionJobData): Promise<void> {
+  const q = getAiDlqQueue();
+  if (!q) return;
+  await q.add('failed-ai-extraction', data, {
+    removeOnComplete: false,
+  });
+  console.log(`Moved to AI DLQ: spool ${data.spoolId}`);
+}
+
+export async function pauseAiQueue(resumeAfterMs: number): Promise<void> {
+  if (!aiExtractionQueue) return;
+  await aiExtractionQueue.pause();
+  console.log(`AI extraction queue paused for ${resumeAfterMs / 1000}s`);
+  setTimeout(async () => {
+    try {
+      if (aiExtractionQueue) {
+        await aiExtractionQueue.resume();
+        console.log('AI extraction queue resumed');
+      }
+    } catch (err) {
+      console.error('Failed to resume AI queue:', (err as Error).message);
+    }
+  }, resumeAfterMs);
+}
+
+export async function resumeAiQueue(): Promise<void> {
+  if (!aiExtractionQueue) return;
+  await aiExtractionQueue.resume();
+  console.log('AI extraction queue resumed (manual)');
+}
+
+// --- Excel generation queue (REQ-12) ---
 
 export interface ExcelGenerationJobData {
   exportId: string;
@@ -199,6 +276,8 @@ export function startExcelWorker(processor: ExcelProcessorFn): Worker | null {
   return excelWorker;
 }
 
+// --- Init / Health / Shutdown ---
+
 export async function initQueue(): Promise<void> {
   if (!env.REDIS_URL) {
     console.log('REDIS_URL not set — job queue disabled');
@@ -226,6 +305,11 @@ export async function shutdownQueue(): Promise<void> {
     await worker.close();
     worker = null;
   }
+  if (aiWorker) {
+    console.log('Draining BullMQ AI worker...');
+    await aiWorker.close();
+    aiWorker = null;
+  }
   if (excelWorker) {
     console.log('Draining BullMQ excel worker...');
     await excelWorker.close();
@@ -239,6 +323,10 @@ export async function shutdownQueue(): Promise<void> {
     await aiExtractionQueue.close();
     aiExtractionQueue = null;
   }
+  if (aiDlqQueue) {
+    await aiDlqQueue.close();
+    aiDlqQueue = null;
+  }
   if (dlqQueue) {
     await dlqQueue.close();
     dlqQueue = null;
@@ -250,6 +338,10 @@ export async function shutdownQueue(): Promise<void> {
   if (excelWorkerConnection) {
     await excelWorkerConnection.quit();
     excelWorkerConnection = null;
+  }
+  if (aiWorkerConnection) {
+    await aiWorkerConnection.quit();
+    aiWorkerConnection = null;
   }
   if (workerConnection) {
     await workerConnection.quit();

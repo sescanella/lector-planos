@@ -2,10 +2,31 @@ import { Request, Response, NextFunction } from 'express';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { env } from '../config/env';
 
-// TODO: Replace with JWT validation for multi-user support
+/**
+ * Timing-safe string comparison using HMAC digests.
+ * HMAC both inputs to fixed-length digests — eliminates length side-channel.
+ */
+function safeCompare(a: string, b: string): boolean {
+  const hashA = createHmac('sha256', 'key-compare').update(a).digest();
+  const hashB = createHmac('sha256', 'key-compare').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
+
+/**
+ * API key authentication middleware.
+ * In production, API_KEY must be set (enforced by env.ts validation).
+ * In development, when API_KEY is empty, auth is skipped with a warning.
+ */
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  // Skip auth in development when no API_KEY is configured
   if (!env.API_KEY) {
+    if (env.NODE_ENV === 'production') {
+      res.status(503).json({
+        error: 'configuration_error',
+        message: 'Service not properly configured',
+      });
+      return;
+    }
+    // Development only: skip auth when no key configured
     next();
     return;
   }
@@ -21,11 +42,4 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   }
 
   next();
-}
-
-function safeCompare(a: string, b: string): boolean {
-  // HMAC both inputs to fixed-length digests — eliminates length side-channel
-  const hashA = createHmac('sha256', 'key-compare').update(a).digest();
-  const hashB = createHmac('sha256', 'key-compare').update(b).digest();
-  return timingSafeEqual(hashA, hashB);
 }

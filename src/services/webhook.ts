@@ -46,6 +46,8 @@ function signPayload(body: string, timestamp: number): string {
   return 'sha256=' + hmac.digest('hex');
 }
 
+// --- SSRF protection ---
+
 function isBlockedUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -57,6 +59,14 @@ function isBlockedUrl(url: string): boolean {
   } catch {
     return true;
   }
+}
+
+/**
+ * Validates a webhook URL for safety (HTTPS-only, no private/metadata hosts).
+ * Used by REQ-11 notifyJobCompletion for allowlist checks.
+ */
+export function isAllowedWebhookUrl(urlString: string): boolean {
+  return !isBlockedUrl(urlString);
 }
 
 const PRIVATE_IP_PATTERNS = [
@@ -179,6 +189,11 @@ export async function notifyJobCompletion(
   errorMessage?: string
 ): Promise<void> {
   if (!webhookUrl) return;
+
+  if (!isAllowedWebhookUrl(webhookUrl)) {
+    console.warn(`Blocked webhook to disallowed URL: ${webhookUrl}`);
+    return;
+  }
 
   await sendWebhook(webhookUrl, {
     job_id: jobId,
