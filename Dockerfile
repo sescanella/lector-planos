@@ -29,7 +29,7 @@ RUN chown -R nodejs:nodejs /app
 USER nodejs
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://localhost:3000/health').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://localhost:'+(process.env.PORT||3000)+'/health').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"
 
 EXPOSE 3000
 
