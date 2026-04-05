@@ -10,7 +10,6 @@ const router = Router();
 const exportLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  keyGenerator: (req) => req.ip || 'unknown',
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'rate_limited', message: 'Export rate limit exceeded. Maximum 5 exports per 15 minutes.' },

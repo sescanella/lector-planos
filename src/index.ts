@@ -149,7 +149,7 @@ async function recoverStaleJobs(): Promise<void> {
     `UPDATE pdf_file
      SET status = 'uploaded'
      WHERE status = 'processing'
-       AND updated_at < NOW() - INTERVAL '10 minutes'
+       AND processing_started_at < NOW() - INTERVAL '10 minutes'
      RETURNING file_id, job_id, s3_key, original_filename`,
   );
   if (staleFiles.length > 0) {
