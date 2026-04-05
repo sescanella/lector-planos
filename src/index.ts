@@ -194,8 +194,10 @@ async function start() {
   }, 5 * 60_000);
   staleRecoveryInterval.unref(); // Don't prevent process exit
 
-  const server = app.listen(env.PORT, () => {
-    console.log(`BlueprintAI server listening on port ${env.PORT}`);
+  // Bind to 0.0.0.0 explicitly so Railway's healthcheck can reach it.
+  // Without a host, Node may bind to ::1 only in some environments.
+  const server = app.listen(env.PORT, '0.0.0.0', () => {
+    console.log(`BlueprintAI server listening on 0.0.0.0:${env.PORT}`);
   });
 
   // Graceful shutdown
