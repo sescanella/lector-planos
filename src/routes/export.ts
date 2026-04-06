@@ -129,10 +129,12 @@ router.get('/:jobId/export/:exportId', async (req: Request, res: Response) => {
     }
 
     const { rows } = await pool.query(
-      `SELECT export_id, job_id, status, s3_key, file_size_bytes, spool_count,
-              error_message, include_confidence, created_at, completed_at, expires_at
-       FROM excel_export
-       WHERE export_id = $1 AND job_id = $2`,
+      `SELECT e.export_id, e.job_id, e.status, e.s3_key, e.file_size_bytes, e.spool_count,
+              e.error_message, e.include_confidence, e.created_at, e.completed_at, e.expires_at,
+              j.name AS job_name
+       FROM excel_export e
+       LEFT JOIN extraction_job j ON j.job_id = e.job_id
+       WHERE e.export_id = $1 AND e.job_id = $2`,
       [exportId, jobId]
     );
 
@@ -150,8 +152,11 @@ router.get('/:jobId/export/:exportId', async (req: Request, res: Response) => {
     }
 
     if (exp.status === 'completed' && exp.s3_key) {
-      const jobPrefix = jobId.substring(0, 8);
-      const filename = `export-${jobPrefix}-${exp.spool_count}spools.xlsx`;
+      // Build filename: use job name if available, sanitize for filesystem safety
+      const safeName = exp.job_name
+        ? exp.job_name.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ _\-]/g, '').trim().replace(/\s+/g, '_')
+        : `OT-${jobId.substring(0, 8)}`;
+      const filename = `${safeName}-KM.xlsx`;
       const downloadUrl = await getExportPresignedUrl(exp.s3_key, filename);
 
       res.json({
