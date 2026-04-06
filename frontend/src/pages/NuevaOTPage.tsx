@@ -149,7 +149,7 @@ export function NuevaOTPage() {
   // Submit: create job then upload
   // ------------------------------------------------------------------
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = async () => {
     if (!canSubmit) return;
     setCreateError(null);
     setPhase('creating');
@@ -162,7 +162,7 @@ export function NuevaOTPage() {
       setCreateError('Error al crear la OT. Intenta nuevamente.');
       setPhase('idle');
     }
-  }, [canSubmit, createJob]);
+  };
 
   // When jobId is set and phase is uploading, push files to the upload queue
   const hasStartedUpload = useRef(false);
