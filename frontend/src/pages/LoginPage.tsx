@@ -14,7 +14,7 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!apiKey.trim()) {
-      setError('Clave invalida');
+      setError('Clave inválida');
       return;
     }
     setError(null);
@@ -35,12 +35,12 @@ export function LoginPage() {
       if (err instanceof Error && 'response' in err) {
         const status = (err as { response: { status: number } }).response.status;
         if (status === 401) {
-          setError('Clave invalida');
+          setError('Clave inválida');
         } else {
-          setError('Error de conexion. Intenta mas tarde.');
+          setError('Error de conexión. Intenta más tarde.');
         }
       } else {
-        setError('Sin conexion al servidor.');
+        setError('Sin conexión al servidor.');
       }
     } finally {
       setLoading(false);

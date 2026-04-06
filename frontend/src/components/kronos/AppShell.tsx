@@ -35,7 +35,7 @@ export function AppShell({ children }: AppShellProps) {
             onClick={handleLogout}
             className="flex items-center gap-2 cursor-pointer border-none bg-transparent font-heading text-[11px] uppercase tracking-[0.15em] text-white/40 transition-colors duration-150 hover:text-white/60"
           >
-            <LogOut size={16} strokeWidth={2} />
+            <LogOut size={16} strokeWidth={2} aria-hidden="true" />
             CERRAR SESIÓN
           </button>
         </div>

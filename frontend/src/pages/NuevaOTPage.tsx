@@ -149,8 +149,11 @@ export function NuevaOTPage() {
   // Submit: create job then upload
   // ------------------------------------------------------------------
 
+  const isSubmitting = useRef(false);
+
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || isSubmitting.current) return;
+    isSubmitting.current = true;
     setCreateError(null);
     setPhase('creating');
 
@@ -161,6 +164,7 @@ export function NuevaOTPage() {
     } catch {
       setCreateError('Error al crear la OT. Intenta nuevamente.');
       setPhase('idle');
+      isSubmitting.current = false;
     }
   };
 

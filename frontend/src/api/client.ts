@@ -2,6 +2,8 @@ import ky, { type HTTPError } from 'ky';
 import { ZodError } from 'zod';
 import { API_URL, AUTH_STORAGE_KEY } from '@/constants';
 
+let isRedirectingToLogin = false;
+
 export const apiClient = ky.create({
   prefixUrl: API_URL,
   hooks: {
@@ -15,7 +17,8 @@ export const apiClient = ky.create({
     ],
     afterResponse: [
       (_request, _options, response) => {
-        if (response.status === 401) {
+        if (response.status === 401 && !isRedirectingToLogin) {
+          isRedirectingToLogin = true;
           sessionStorage.removeItem(AUTH_STORAGE_KEY);
           window.location.href = '/login';
         }

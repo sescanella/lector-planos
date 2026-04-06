@@ -222,13 +222,15 @@ export async function getExportPresignedUrl(
   filename: string
 ): Promise<string> {
   const s3 = getClient();
-  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  // Filename is expected to be pre-sanitized by the caller (export.ts).
+  // Use RFC 5987 encoding for UTF-8 filenames (supports accented characters).
+  const encodedFilename = encodeURIComponent(filename).replace(/'/g, '%27');
   const url = await getSignedUrl(
     s3,
     new GetObjectCommand({
       Bucket: env.S3_BUCKET_NAME,
       Key: s3Key,
-      ResponseContentDisposition: `attachment; filename="${safeFilename}"`,
+      ResponseContentDisposition: `attachment; filename="${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}"; filename*=UTF-8''${encodedFilename}`,
     }),
     { expiresIn: env.EXPORT_PRESIGNED_EXPIRY_SECS }
   );

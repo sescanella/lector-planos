@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthGuard } from '@/components/layout/AuthGuard';
@@ -8,6 +8,11 @@ import { LoginPage } from '@/pages/LoginPage';
 import OTsPage from '@/pages/OTsPage';
 import { NuevaOTPage } from '@/pages/NuevaOTPage';
 import OTDetailPage from '@/pages/OTDetailPage';
+
+function JobRedirect() {
+  const { jobId } = useParams();
+  return <Navigate to={jobId ? `/ots/${jobId}` : '/ots'} replace />;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,7 +63,7 @@ export default function App() {
               />
               {/* Redirects from old routes */}
               <Route path="/jobs" element={<Navigate to="/ots" replace />} />
-              <Route path="/jobs/:jobId" element={<Navigate to="/ots" replace />} />
+              <Route path="/jobs/:jobId" element={<JobRedirect />} />
               <Route path="/" element={<Navigate to="/ots" replace />} />
               <Route
                 path="*"
@@ -68,12 +73,12 @@ export default function App() {
                       <p className="font-heading text-[11px] font-semibold tracking-[0.3em] uppercase text-white/40 mb-4">
                         PÁGINA NO ENCONTRADA
                       </p>
-                      <a
-                        href="/ots"
+                      <Link
+                        to="/ots"
                         className="font-heading text-[11px] font-semibold tracking-[0.15em] uppercase text-accent hover:underline"
                       >
                         VOLVER A OTS
-                      </a>
+                      </Link>
                     </div>
                   </div>
                 }

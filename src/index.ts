@@ -22,7 +22,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 app.use(cors({
-  origin: env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(','),
+  origin: env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(',').map(s => s.trim()).filter(Boolean),
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'X-API-Key'],
 }));
@@ -116,6 +116,16 @@ async function recoverStaleJobs(): Promise<void> {
   const pool = getPool();
   if (!pool) return;
 
+  // Advisory lock to prevent concurrent recovery across instances
+  const RECOVERY_LOCK_ID = 73910; // arbitrary unique constant
+  const { rows: lockRows } = await pool.query('SELECT pg_try_advisory_lock($1) AS acquired', [RECOVERY_LOCK_ID]);
+  if (!lockRows[0]?.acquired) {
+    console.log('Stale recovery: another instance holds the lock — skipping');
+    return;
+  }
+
+  try {
+
   // Recover spools stuck in 'processing' for > 10 min
   const { rows: staleSpools } = await pool.query(
     `UPDATE spool
@@ -166,6 +176,10 @@ async function recoverStaleJobs(): Promise<void> {
         console.error(`Failed to re-enqueue stale file ${row.file_id}:`, (err as Error).message);
       }
     }
+  }
+
+  } finally {
+    await pool.query('SELECT pg_advisory_unlock($1)', [RECOVERY_LOCK_ID]);
   }
 }
 

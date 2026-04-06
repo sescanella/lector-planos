@@ -97,21 +97,20 @@ describe('parseVisionResponse', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseVisionResponse edge cases', () => {
-  it('should handle valid JSON with wrong schema (no runtime validation)', () => {
-    const result = parseVisionResponse('{"foo": "bar"}');
-    expect(result).toEqual({ foo: 'bar' });
+  it('should reject valid JSON with wrong schema (missing required fields)', () => {
+    expect(() => parseVisionResponse('{"foo": "bar"}')).toThrow('Failed to parse Vision API response');
   });
 
   it('should extract JSON from markdown with language tag', () => {
-    const raw = '```json\n{"cajetin":{"confidence":0.9}}\n```';
+    const raw = '```json\n{"cajetin":{"confidence":0.9},"overallConfidence":0.9,"drawingFormat":{"paperSize":"A3","orientation":"landscape","familyHint":"unknown"}}\n```';
     const result = parseVisionResponse(raw);
     expect(result).toHaveProperty('cajetin');
   });
 
   it('should handle nested braces in regex fallback', () => {
-    const raw = 'Some text {"data": {"nested": {"deep": true}}} more text';
+    const raw = 'Some text {"cajetin":{},"overallConfidence":0.8,"drawingFormat":{"paperSize":"A3","orientation":"landscape","familyHint":"unknown"},"data": {"nested": {"deep": true}}} more text';
     const result = parseVisionResponse(raw);
-    expect(result).toHaveProperty('data');
+    expect(result).toHaveProperty('cajetin');
   });
 });
 

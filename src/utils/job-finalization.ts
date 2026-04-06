@@ -25,7 +25,7 @@ export async function checkAndFinalizeJob(jobId: string): Promise<void> {
 
   const finalStatus = succeeded > 0 ? 'completed' : 'failed';
 
-  const { rows: jobRows } = await pool.query(
+  const result = await pool.query(
     `UPDATE extraction_job
      SET status = $2,
          completed_at = NOW(),
@@ -36,6 +36,13 @@ export async function checkAndFinalizeJob(jobId: string): Promise<void> {
     [jobId, finalStatus, done],
   );
 
+  // Guard: if another worker already finalized this job, skip
+  if ((result.rowCount ?? 0) === 0) {
+    console.log(`Job ${jobId} already finalized by another worker — skipping`);
+    return;
+  }
+
+  const jobRows = result.rows;
   console.log(`Job ${jobId} finalized: status=${finalStatus}, processed=${done}/${total}, succeeded=${succeeded}`);
 
   // Fire-and-forget webhook notification

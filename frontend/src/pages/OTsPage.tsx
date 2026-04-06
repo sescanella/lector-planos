@@ -8,6 +8,7 @@ import {
   StateBadge,
   ProgressBar,
   PrimaryButton,
+  ErrorBanner,
 } from '@/components/kronos';
 import type { Job } from '@/types/api';
 import type { BadgeStatus } from '@/components/kronos';
@@ -99,7 +100,7 @@ function DownloadButton({ jobId }: { jobId: string }) {
 export default function OTsPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
-  const { data, isLoading } = useJobs(page);
+  const { data, isLoading, isError, error } = useJobs(page);
 
   const jobs = data?.jobs ?? [];
   const pagination = data?.pagination;
@@ -111,6 +112,29 @@ export default function OTsPage() {
       <div className="flex flex-1 items-center justify-center">
         <Loader2 size={20} strokeWidth={2} className="animate-spin text-white/40" />
       </div>
+    );
+  }
+
+  // -- Error state ----------------------------------------------------------
+  if (isError) {
+    return (
+      <>
+        <TechnicalLabel system="SISTEMA 01" name="ÓRDENES DE TRABAJO" />
+
+        <div className="mt-4 flex items-center justify-between">
+          <h1 className="font-sans text-[clamp(1.75rem,3vw,2.5rem)] font-extrabold uppercase tracking-[-0.02em] text-white">
+            OTs
+          </h1>
+          <PrimaryButton onClick={() => navigate('/ots/nueva')}>
+            <Plus size={16} strokeWidth={2} />
+            NUEVA OT
+          </PrimaryButton>
+        </div>
+
+        <div className="mt-6 max-w-2xl">
+          <ErrorBanner message={`Error al cargar las órdenes de trabajo${error?.message ? `: ${error.message}` : ''}`} />
+        </div>
+      </>
     );
   }
 

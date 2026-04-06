@@ -495,7 +495,7 @@ function ResultMode({ job, uiStatus }: { job: JobDetail; uiStatus: BadgeStatus }
       {/* Download button or error banner */}
       {isError ? (
         <div className="mt-8 max-w-md mx-auto">
-          <ErrorBanner message="Error catastrofico en el procesamiento" />
+          <ErrorBanner message="Error catastrófico en el procesamiento" />
         </div>
       ) : (
         <div className="mt-8 max-w-md mx-auto">

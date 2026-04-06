@@ -23,6 +23,9 @@ export function useUploadQueue(jobId: string | null) {
     return () => window.removeEventListener('beforeunload', handler);
   }, [isUploading]);
 
+  // Ref for cleanup on unmount (assigned after cancelAll is defined)
+  const cancelAllRef = useRef<(() => void) | null>(null);
+
   const updateFile = useCallback((id: string, patch: Partial<UploadFile>) => {
     setFiles(prev => prev.map(f => (f.id === id ? { ...f, ...patch } : f)));
   }, []);
@@ -129,6 +132,14 @@ export function useUploadQueue(jobId: string | null) {
         ? { ...f, status: 'failed' as const, error: 'Cancelado' }
         : f
     ));
+  }, []);
+
+  // Keep ref in sync and cancel uploads on unmount
+  cancelAllRef.current = cancelAll;
+  useEffect(() => {
+    return () => {
+      cancelAllRef.current?.();
+    };
   }, []);
 
   const reset = useCallback(() => {

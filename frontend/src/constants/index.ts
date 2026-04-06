@@ -1,4 +1,4 @@
-export const API_URL = import.meta.env.VITE_API_URL as string ?? 'http://localhost:3000';
+export const API_URL = (import.meta.env.VITE_API_URL as string) || 'http://localhost:3000';
 
 export const AUTH_STORAGE_KEY = 'blueprintai_api_key';
 export const INTENDED_PATH_KEY = 'blueprintai_intended_path';

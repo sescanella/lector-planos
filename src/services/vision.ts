@@ -189,14 +189,18 @@ function getClient(): Anthropic {
 export function parseVisionResponse(rawText: string): VisionExtractionResult {
   // 1. Direct JSON.parse
   try {
-    return JSON.parse(rawText) as VisionExtractionResult;
+    const parsed = JSON.parse(rawText);
+    validateVisionResponse(parsed);
+    return parsed;
   } catch { /* fall through */ }
 
   // 2. Extract from markdown code fences
   const fenceMatch = rawText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   if (fenceMatch) {
     try {
-      return JSON.parse(fenceMatch[1]) as VisionExtractionResult;
+      const parsed = JSON.parse(fenceMatch[1]);
+      validateVisionResponse(parsed);
+      return parsed;
     } catch { /* fall through */ }
   }
 
@@ -204,11 +208,20 @@ export function parseVisionResponse(rawText: string): VisionExtractionResult {
   const braceMatch = rawText.match(/\{[\s\S]*\}/);
   if (braceMatch) {
     try {
-      return JSON.parse(braceMatch[0]) as VisionExtractionResult;
+      const parsed = JSON.parse(braceMatch[0]);
+      validateVisionResponse(parsed);
+      return parsed;
     } catch { /* fall through */ }
   }
 
   throw new Error('Failed to parse Vision API response as JSON after all fallback attempts');
+}
+
+function validateVisionResponse(data: unknown): asserts data is VisionExtractionResult {
+  if (!data || typeof data !== 'object') throw new Error('Invalid vision response: not an object');
+  if (!('overallConfidence' in data)) throw new Error('Invalid vision response: missing overallConfidence');
+  if (!('cajetin' in data)) throw new Error('Invalid vision response: missing cajetin');
+  if (!('drawingFormat' in data)) throw new Error('Invalid vision response: missing drawingFormat');
 }
 
 // ── Core extraction function ────────────────────────────────────────────────

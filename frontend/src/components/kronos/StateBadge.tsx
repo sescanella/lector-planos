@@ -43,6 +43,7 @@ export function StateBadge({ status, animated = false }: StateBadgeProps) {
 
   return (
     <span
+      role="status"
       className={cn(
         'inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5',
         config.bgColor,
@@ -52,7 +53,7 @@ export function StateBadge({ status, animated = false }: StateBadgeProps) {
         className={cn(
           'text-[8px]',
           config.dotColor,
-          shouldPulse && 'animate-[pulse_2s_ease-in-out_infinite]',
+          shouldPulse && 'animate-[pulse_2s_ease-in-out_infinite] motion-reduce:animate-none',
         )}
         aria-hidden="true"
       >
