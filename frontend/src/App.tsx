@@ -2,14 +2,12 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthGuard } from '@/components/layout/AuthGuard';
-import { Header } from '@/components/layout/Header';
-import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { AppShell } from '@/components/kronos/AppShell';
 import { RootErrorBoundary } from '@/components/ErrorBoundary';
-import { Toaster } from '@/components/ui/toaster';
 import { LoginPage } from '@/pages/LoginPage';
-import { JobsPage } from '@/pages/JobsPage';
-import { JobDetailPage } from '@/pages/JobDetailPage';
-import { SpoolDetailPage } from '@/pages/SpoolDetailPage';
+import OTsPage from '@/pages/OTsPage';
+import { NuevaOTPage } from '@/pages/NuevaOTPage';
+import OTDetailPage from '@/pages/OTDetailPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,26 +24,61 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>
-            <div className="min-h-screen bg-background">
-              <Header />
-              <Breadcrumbs />
-              <main>
-                <Routes>
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/jobs" element={<AuthGuard><JobsPage /></AuthGuard>} />
-                  <Route path="/jobs/:jobId" element={<AuthGuard><JobDetailPage /></AuthGuard>} />
-                  <Route path="/jobs/:jobId/spools/:spoolId" element={<AuthGuard><SpoolDetailPage /></AuthGuard>} />
-                  <Route path="/" element={<Navigate to="/jobs" replace />} />
-                  <Route path="*" element={
-                    <div className="mx-auto max-w-7xl px-4 py-16 text-center">
-                      <h2 className="font-heading text-xl font-bold mb-2">Página no encontrada</h2>
-                      <p className="text-muted-foreground">La página que buscas no existe.</p>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route
+                path="/ots"
+                element={
+                  <AuthGuard>
+                    <AppShell>
+                      <OTsPage />
+                    </AppShell>
+                  </AuthGuard>
+                }
+              />
+              <Route
+                path="/ots/nueva"
+                element={
+                  <AuthGuard>
+                    <AppShell>
+                      <NuevaOTPage />
+                    </AppShell>
+                  </AuthGuard>
+                }
+              />
+              <Route
+                path="/ots/:otId"
+                element={
+                  <AuthGuard>
+                    <AppShell>
+                      <OTDetailPage />
+                    </AppShell>
+                  </AuthGuard>
+                }
+              />
+              {/* Redirects from old routes */}
+              <Route path="/jobs" element={<Navigate to="/ots" replace />} />
+              <Route path="/jobs/:jobId" element={<Navigate to="/ots" replace />} />
+              <Route path="/" element={<Navigate to="/ots" replace />} />
+              <Route
+                path="*"
+                element={
+                  <div className="min-h-screen bg-primary-dark flex items-center justify-center">
+                    <div className="text-center">
+                      <p className="font-heading text-[11px] font-semibold tracking-[0.3em] uppercase text-white/40 mb-4">
+                        PÁGINA NO ENCONTRADA
+                      </p>
+                      <a
+                        href="/ots"
+                        className="font-heading text-[11px] font-semibold tracking-[0.15em] uppercase text-accent hover:underline"
+                      >
+                        VOLVER A OTS
+                      </a>
                     </div>
-                  } />
-                </Routes>
-              </main>
-            </div>
-            <Toaster />
+                  </div>
+                }
+              />
+            </Routes>
           </BrowserRouter>
         </AuthProvider>
       </QueryClientProvider>

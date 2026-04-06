@@ -1,16 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/api/client';
 import { AuthValidateSchema } from '@/types/api';
 
 export function LoginPage() {
   const [apiKey, setApiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { login, getIntendedPath } = useAuth();
@@ -19,7 +14,7 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!apiKey.trim()) {
-      setError('Ingresa una API key');
+      setError('Clave invalida');
       return;
     }
     setError(null);
@@ -34,18 +29,18 @@ export function LoginPage() {
       if (result.valid) {
         login(apiKey);
         const intended = getIntendedPath();
-        navigate(intended ?? '/jobs', { replace: true });
+        navigate(intended ?? '/ots', { replace: true });
       }
     } catch (err) {
       if (err instanceof Error && 'response' in err) {
         const status = (err as { response: { status: number } }).response.status;
         if (status === 401) {
-          setError('API key inválida');
+          setError('Clave invalida');
         } else {
-          setError('Error de conexión. Intenta más tarde.');
+          setError('Error de conexion. Intenta mas tarde.');
         }
       } else {
-        setError('Sin conexión al servidor.');
+        setError('Sin conexion al servidor.');
       }
     } finally {
       setLoading(false);
@@ -53,53 +48,60 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-[80vh] items-center justify-center px-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <div className="mb-2">
-            <span className="font-heading text-3xl font-bold text-primary">Blueprint</span>
-            <span className="font-heading text-3xl font-bold text-accent">AI</span>
-          </div>
-          <CardTitle className="text-lg">Iniciar sesión</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="api-key" className="text-sm font-medium">
-                API Key
-              </label>
-              <div className="relative">
-                <Input
-                  id="api-key"
-                  type={showKey ? 'text' : 'password'}
-                  value={apiKey}
-                  onChange={e => setApiKey(e.target.value)}
-                  placeholder="Ingresa tu API key"
-                  autoComplete="off"
-                  aria-describedby={error ? 'login-error' : undefined}
-                />
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowKey(!showKey)}
-                  aria-label={showKey ? 'Ocultar API key' : 'Mostrar API key'}
-                >
-                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
+    <div className="relative flex min-h-screen items-center justify-center bg-primary-dark">
+      {/* Login content */}
+      <div className="w-full max-w-sm px-6">
+        {/* Technical label */}
+        <div className="mb-2 flex items-center gap-3">
+          <span className="font-heading text-[10px] leading-none text-accent">◆</span>
+          <span className="font-heading text-[11px] font-semibold uppercase tracking-[0.3em] text-white/85">
+            Lector de Planos
+          </span>
+        </div>
+
+        {/* Divider */}
+        <div className="mb-8 h-px w-[60px] bg-white/20" />
+
+        {/* Form */}
+        <form onSubmit={handleSubmit}>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="Ingresa tu API key"
+            autoComplete="off"
+            aria-describedby={error ? 'login-error' : undefined}
+            className="w-full rounded-none border border-white/[0.12] bg-white/[0.04] px-4 py-3 font-sans text-[15px] text-white outline-none transition-[border-color] duration-150 placeholder:text-white/30 focus:border-white/30"
+          />
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-4 w-full cursor-pointer rounded-none bg-accent px-6 py-3 font-sans text-sm font-bold uppercase tracking-[0.15em] text-white transition-colors duration-150 hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {loading ? 'Verificando...' : 'Entrar'}
+          </button>
+
+          {error && (
+            <div
+              id="login-error"
+              role="alert"
+              className="mt-4 rounded-none border border-[rgba(248,113,113,0.2)] bg-[rgba(248,113,113,0.08)] px-3 py-2 font-heading text-[11px] font-semibold text-[#F87171]"
+            >
+              {error}
             </div>
-            {error && (
-              <p id="login-error" className="text-sm text-error" role="alert">
-                {error}
-              </p>
-            )}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-              Entrar
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          )}
+        </form>
+      </div>
+
+      {/* Footer */}
+      <div className="absolute bottom-0 flex w-full justify-center py-6">
+        <div className="flex items-center gap-4 font-heading text-[10px] font-semibold uppercase tracking-[0.25em] text-white/30">
+          <span>Kronos Mining · Santiago, Chile</span>
+          <span className="text-[6px] text-[rgba(255,120,0,0.6)]" aria-hidden="true">●</span>
+          <span>Est. 2016</span>
+        </div>
+      </div>
     </div>
   );
 }

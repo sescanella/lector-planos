@@ -1,78 +1,112 @@
+/* ============================================================
+   Lector de Planos — Global Styles
+   Kronos Design System tokens + base styles
+   ============================================================ */
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/* --- Fonts ------------------------------------------------- */
+
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/InstrumentSans-Variable.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/GeistMono-Variable.ttf") format("truetype");
+}
+
+/* --- Theme tokens ------------------------------------------ */
 
 @theme inline {
-  --color-primary: #FF5B00;
-  --color-primary-foreground: #FFFFFF;
-  --color-accent: #0A4C95;
-  --color-accent-foreground: #FFFFFF;
-  --color-success: #16A34A;
-  --color-warning: #EAB308;
-  --color-error: #DC2626;
-  --color-background: #FAFAFA;
-  --color-surface: #FFFFFF;
-  --color-foreground: #1A1A1A;
-  --color-muted: #F4F4F5;
-  --color-muted-foreground: #6B7280;
-  --color-border: #E5E7EB;
-  --color-input: #E5E7EB;
-  --color-ring: #FF5B00;
-  --color-card: #FFFFFF;
-  --color-card-foreground: #1A1A1A;
-  --color-popover: #FFFFFF;
-  --color-popover-foreground: #1A1A1A;
-  --color-destructive: #DC2626;
-  --color-destructive-foreground: #FFFFFF;
-  --color-secondary: #F4F4F5;
-  --color-secondary-foreground: #1A1A1A;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-heading: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  /* Typography */
+  --font-sans: "Instrument Sans", system-ui, -apple-system, sans-serif;
+  --font-heading: "Geist Mono", ui-monospace, monospace;
+
+  /* Primary (azul corporativo) */
+  --color-primary-dark: #052650;
+  --color-primary: #083A75;
+  --color-primary-light: #0A4C95;
+
+  /* Accent (naranjo firmado) */
+  --color-accent: #FF5B00;
+  --color-accent-dark: #E64A19;
+  --color-accent-light: #FF7A33;
+
+  /* Neutrals */
+  --color-neutral-50: #F9FAFB;
+  --color-neutral-100: #F3F4F6;
+  --color-neutral-200: #E5E7EB;
+  --color-neutral-300: #D1D5DB;
+  --color-neutral-400: #9CA3AF;
+  --color-neutral-500: #6B7280;
+  --color-neutral-600: #4B5563;
+  --color-neutral-700: #374151;
+  --color-neutral-800: #1F2937;
+  --color-neutral-900: #111827;
+
+  /* State tokens (app-specific, contribute back to design system later) */
+  --color-state-processing: #0A4C95;
+  --color-state-ready: #4ADE80;
+  --color-state-partial: #FBBF24;
+  --color-state-error: #F87171;
+
+  /* Shadows (for light-background contexts) */
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/inter-regular.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/inter-medium.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Poppins';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/poppins-semibold.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Poppins';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/poppins-bold.woff2') format('woff2');
-}
+/* --- Base styles ------------------------------------------- */
 
 body {
+  background-color: var(--color-primary-dark);
+  color: #ffffff;
   font-family: var(--font-sans);
-  background-color: var(--color-background);
-  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, h4 {
-  font-family: var(--font-heading);
+/* Selection */
+::selection {
+  background-color: rgba(255, 91, 0, 0.35);
+  color: #ffffff;
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
+
+/* Scrollbar (subtle for dark background) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
