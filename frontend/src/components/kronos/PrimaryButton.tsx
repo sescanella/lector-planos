@@ -30,7 +30,7 @@ export function PrimaryButton({
         'transition-colors duration-150 ease-in-out',
         'hover:bg-[#E64A19]',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-white focus-visible:outline-offset-[3px]',
-        'disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none',
+        'disabled:bg-white/[0.08] disabled:text-white/30 disabled:cursor-not-allowed disabled:pointer-events-none',
         fullWidth && 'w-full',
         className,
       )}

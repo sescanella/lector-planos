@@ -111,33 +111,33 @@ export default function OTsPage() {
   // -- Empty state ----------------------------------------------------------
   if (isEmpty) {
     return (
-      <div className="max-w-6xl mx-auto px-6 lg:px-12 py-8 lg:py-12">
+      <>
         <TechnicalLabel system="SISTEMA 01" name="ÓRDENES DE TRABAJO" />
 
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mt-4 flex items-center justify-between">
           <h1 className="font-sans text-[clamp(1.75rem,3vw,2.5rem)] font-extrabold uppercase tracking-[-0.02em] text-white">
             OTs
           </h1>
-        </div>
-
-        <div className="flex flex-1 flex-col items-center justify-center py-32 gap-6">
-          <p className="font-sans text-[15px] text-white/40">
-            No hay órdenes de trabajo
-          </p>
           <PrimaryButton onClick={() => navigate('/ots/nueva')}>
             + NUEVA OT
           </PrimaryButton>
         </div>
-      </div>
+
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <p className="font-sans text-[15px] text-white/40">
+            No hay órdenes de trabajo
+          </p>
+        </div>
+      </>
     );
   }
 
   // -- Table state ----------------------------------------------------------
   return (
-    <div className="max-w-6xl mx-auto px-6 lg:px-12 py-8 lg:py-12">
+    <>
       <TechnicalLabel system="SISTEMA 01" name="ÓRDENES DE TRABAJO" />
 
-      <div className="mt-6 flex items-center justify-between">
+      <div className="mt-4 flex items-center justify-between">
         <h1 className="font-sans text-[clamp(1.75rem,3vw,2.5rem)] font-extrabold uppercase tracking-[-0.02em] text-white">
           OTs
         </h1>
@@ -147,7 +147,7 @@ export default function OTsPage() {
       </div>
 
       {/* Table */}
-      <div className="mt-8 w-full overflow-x-auto">
+      <div className="mt-6 w-full overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-white/[0.08]">
@@ -266,6 +266,6 @@ export default function OTsPage() {
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }

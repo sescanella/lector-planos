@@ -18,11 +18,11 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-primary-dark">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-black/20 backdrop-blur-sm">
+      <header className="sticky top-0 z-30 border-b border-white/[0.12] bg-black/30 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 lg:px-12">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <span className="text-[10px] leading-none text-accent">◆</span>
+            <img src="/kronos-logo.svg" alt="Kronos Mining" className="h-5 w-auto" />
             <span className="font-heading text-[11px] font-semibold uppercase tracking-[0.3em] text-white/85">
               Kronos Mining
             </span>
@@ -34,7 +34,7 @@ export function AppShell({ children }: AppShellProps) {
             onClick={handleLogout}
             className="cursor-pointer border-none bg-transparent font-heading text-[11px] uppercase tracking-[0.15em] text-white/40 transition-colors duration-150 hover:text-white/60"
           >
-            Cerrar sesion
+            CERRAR SESIÓN
           </button>
         </div>
       </header>

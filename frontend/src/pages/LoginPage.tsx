@@ -51,9 +51,9 @@ export function LoginPage() {
     <div className="relative flex min-h-screen items-center justify-center bg-primary-dark">
       {/* Login content */}
       <div className="w-full max-w-sm px-6">
-        {/* Technical label */}
+        {/* Logo + label */}
         <div className="mb-2 flex items-center gap-3">
-          <span className="font-heading text-[10px] leading-none text-accent">◆</span>
+          <img src="/kronos-logo.svg" alt="Kronos Mining" className="h-5 w-auto" />
           <span className="font-heading text-[11px] font-semibold uppercase tracking-[0.3em] text-white/85">
             Lector de Planos
           </span>

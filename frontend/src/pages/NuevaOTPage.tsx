@@ -47,7 +47,7 @@ function validateFile(
     return { rejected: true, reason: 'Excede 50 MB' };
   }
   if (currentValidCount >= UPLOAD.MAX_FILES) {
-    return { rejected: true, reason: 'Limite de 200 archivos alcanzado' };
+    return { rejected: true, reason: 'Límite de 200 archivos alcanzado' };
   }
   return { rejected: false };
 }
@@ -231,7 +231,7 @@ export function NuevaOTPage() {
           type="text"
           value={nombre}
           onChange={e => setNombre(e.target.value)}
-          placeholder="Ej: Cotizacion Codelco Q2 2026"
+          placeholder="Ej: Cotización Codelco Q2 2026"
           disabled={phase !== 'idle'}
           className="w-full max-w-2xl rounded-none border border-white/[0.12] bg-white/[0.04] px-4 py-3 font-sans text-[15px] text-white outline-none transition-[border-color] duration-150 placeholder:text-white/30 focus:border-white/30 disabled:opacity-50"
         />
@@ -260,17 +260,17 @@ export function NuevaOTPage() {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`flex h-48 w-full max-w-2xl cursor-pointer flex-col items-center justify-center gap-2 rounded-none border-2 border-dashed transition-colors duration-150 ${
+            className={`flex h-40 w-full max-w-2xl cursor-pointer flex-col items-center justify-center gap-2 border-2 border-dashed transition-colors duration-150 ${
               dragOver
                 ? 'border-white/30 bg-white/[0.04]'
                 : 'border-white/[0.12] bg-white/[0.02]'
             }`}
           >
             <span className="font-sans text-[15px] text-white/60">
-              Arrastra PDFs aqui o haz clic para seleccionar
+              Arrastra PDFs aquí o haz clic para seleccionar
             </span>
             <span className="font-heading text-[11px] text-white/30">
-              Hasta 200 archivos · 50 MB max.
+              Hasta 200 archivos · 50 MB máx.
             </span>
           </div>
         )}
@@ -288,10 +288,24 @@ export function NuevaOTPage() {
       {/* ---------- File list (idle phase) ---------- */}
       {phase === 'idle' && localFiles.length > 0 && (
         <div className="mt-4 max-w-2xl">
-          <span className="font-heading text-[11px] font-semibold text-white/60">
-            {validFiles.length} plano{validFiles.length !== 1 ? 's' : ''} listo
-            {validFiles.length !== 1 ? 's' : ''}
-          </span>
+          {/* Metrics bar */}
+          <div className="flex items-center gap-3 font-heading text-[11px] font-semibold text-white/60">
+            <span>
+              {validFiles.length} / {UPLOAD.MAX_FILES} archivos
+            </span>
+            <span className="text-[6px] text-white/20" aria-hidden="true">●</span>
+            <span>
+              {formatFileSize(validFiles.reduce((sum, f) => sum + f.file.size, 0))} / {formatFileSize(UPLOAD.MAX_FILES * UPLOAD.MAX_FILE_SIZE_BYTES)}
+            </span>
+            {localFiles.some(f => f.rejected) && (
+              <>
+                <span className="text-[6px] text-white/20" aria-hidden="true">●</span>
+                <span className="text-[#F87171]">
+                  {localFiles.filter(f => f.rejected).length} rechazado{localFiles.filter(f => f.rejected).length !== 1 ? 's' : ''}
+                </span>
+              </>
+            )}
+          </div>
 
           <div className="mt-2 max-h-64 overflow-y-auto">
             {localFiles.map(lf => (
@@ -381,7 +395,7 @@ export function NuevaOTPage() {
       )}
 
       {/* ---------- Action buttons ---------- */}
-      <div className="mt-8 flex max-w-2xl justify-between">
+      <div className="mt-8 flex max-w-2xl items-center justify-end gap-4">
         <OutlineButton
           onClick={() => navigate('/ots')}
           disabled={phase === 'uploading'}
