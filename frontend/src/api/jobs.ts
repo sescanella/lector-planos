@@ -50,9 +50,11 @@ export function useJob(jobId: string) {
 
 export function useCreateJob() {
   const queryClient = useQueryClient();
-  return useMutation<CreateJobResponse, Error>({
-    mutationFn: async () => {
-      const data = await apiClient.post('api/v1/jobs').json();
+  return useMutation<CreateJobResponse, Error, { name?: string }>({
+    mutationFn: async (params) => {
+      const data = await apiClient.post('api/v1/jobs', {
+        json: params?.name ? { name: params.name } : undefined,
+      }).json();
       return CreateJobSchema.parse(data);
     },
     onSuccess: () => {

@@ -46,9 +46,30 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate optional name field
+    const name: string | null = req.body?.name ?? null;
+    if (name !== null) {
+      if (typeof name !== 'string' || name.trim().length === 0) {
+        res.status(400).json({
+          error: 'validation_error',
+          message: 'Invalid name',
+          details: [{ field: 'name', message: 'name must be a non-empty string' }],
+        });
+        return;
+      }
+      if (name.length > 255) {
+        res.status(400).json({
+          error: 'validation_error',
+          message: 'Invalid name',
+          details: [{ field: 'name', message: 'name must be 255 characters or less' }],
+        });
+        return;
+      }
+    }
+
     const { rows } = await pool.query(
-      `INSERT INTO extraction_job (webhook_url) VALUES ($1) RETURNING job_id, status, created_at, webhook_url`,
-      [null]
+      `INSERT INTO extraction_job (webhook_url, name) VALUES ($1, $2) RETURNING job_id, status, created_at, webhook_url, name`,
+      [null, name]
     );
 
     res.status(201).json(rows[0]);
@@ -292,7 +313,7 @@ router.get('/', async (req: Request, res: Response) => {
     const total_pages = Math.ceil(total / limit);
 
     const { rows: jobs } = await pool.query(
-      `SELECT job_id, status, created_at, completed_at, file_count, processed_count, webhook_url
+      `SELECT job_id, name, status, created_at, completed_at, file_count, processed_count, webhook_url
        FROM extraction_job
        ORDER BY created_at DESC
        LIMIT $1 OFFSET $2`,
@@ -415,7 +436,7 @@ router.get('/:jobId', async (req: Request, res: Response) => {
     }
 
     const { rows: jobRows } = await pool.query(
-      'SELECT job_id, status, created_at, completed_at, file_count, processed_count, webhook_url FROM extraction_job WHERE job_id = $1',
+      'SELECT job_id, name, status, created_at, completed_at, file_count, processed_count, webhook_url FROM extraction_job WHERE job_id = $1',
       [jobId]
     );
 

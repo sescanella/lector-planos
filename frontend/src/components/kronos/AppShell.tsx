@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { TechnicalFooter } from './TechnicalFooter';
 
@@ -32,8 +33,9 @@ export function AppShell({ children }: AppShellProps) {
           <button
             type="button"
             onClick={handleLogout}
-            className="cursor-pointer border-none bg-transparent font-heading text-[11px] uppercase tracking-[0.15em] text-white/40 transition-colors duration-150 hover:text-white/60"
+            className="flex items-center gap-2 cursor-pointer border-none bg-transparent font-heading text-[11px] uppercase tracking-[0.15em] text-white/40 transition-colors duration-150 hover:text-white/60"
           >
+            <LogOut size={16} strokeWidth={2} />
             CERRAR SESIÓN
           </button>
         </div>

@@ -265,6 +265,7 @@ describe('Jobs route - validation', () => {
   it('should return job with files when found', async () => {
     const jobRow = {
       job_id: VALID_UUID,
+      name: null,
       status: 'processing',
       created_at: new Date().toISOString(),
       completed_at: null,
@@ -293,7 +294,7 @@ describe('Jobs route - validation', () => {
   it('should create a job via POST', async () => {
     const now = new Date().toISOString();
     mockQuery.mockResolvedValueOnce({
-      rows: [{ job_id: VALID_UUID, status: 'created', created_at: now, webhook_url: null }],
+      rows: [{ job_id: VALID_UUID, status: 'created', created_at: now, webhook_url: null, name: null }],
     });
 
     const res = await request(app)
@@ -302,6 +303,37 @@ describe('Jobs route - validation', () => {
     expect(res.status).toBe(201);
     expect(res.body.job_id).toBe(VALID_UUID);
     expect(res.body.status).toBe('created');
+    expect(res.body.name).toBeNull();
+  });
+
+  it('should create a job with a name via POST', async () => {
+    const now = new Date().toISOString();
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ job_id: VALID_UUID, status: 'created', created_at: now, webhook_url: null, name: 'Cotización Codelco Q2 2026' }],
+    });
+
+    const res = await request(app)
+      .post('/api/v1/jobs')
+      .send({ name: 'Cotización Codelco Q2 2026' });
+    expect(res.status).toBe(201);
+    expect(res.body.job_id).toBe(VALID_UUID);
+    expect(res.body.name).toBe('Cotización Codelco Q2 2026');
+  });
+
+  it('should reject job creation with empty name', async () => {
+    const res = await request(app)
+      .post('/api/v1/jobs')
+      .send({ name: '   ' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('validation_error');
+  });
+
+  it('should reject job creation with name too long', async () => {
+    const res = await request(app)
+      .post('/api/v1/jobs')
+      .send({ name: 'x'.repeat(256) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('validation_error');
   });
 
   it('should reject upload with invalid job UUID', async () => {

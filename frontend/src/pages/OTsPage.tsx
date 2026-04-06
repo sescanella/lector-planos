@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Plus, Download, Loader2 } from 'lucide-react';
 import { useJobs } from '@/api/jobs';
 import { useCreateExport } from '@/api/exports';
 import {
@@ -79,8 +80,13 @@ function DownloadButton({ jobId }: { jobId: string }) {
     <button
       onClick={handleDownload}
       disabled={createExport.isPending}
-      className="font-heading text-[11px] font-semibold uppercase text-accent hover:underline transition-colors duration-150 disabled:opacity-50"
+      className="flex items-center gap-1.5 font-heading text-[11px] font-semibold uppercase text-accent hover:underline transition-colors duration-150 disabled:opacity-50"
     >
+      {createExport.isPending ? (
+        <Loader2 size={14} strokeWidth={2} className="animate-spin" />
+      ) : (
+        <Download size={14} strokeWidth={2} />
+      )}
       {createExport.isPending ? 'GENERANDO...' : 'DESCARGAR'}
     </button>
   );
@@ -103,7 +109,7 @@ export default function OTsPage() {
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="font-sans text-[15px] text-white/40">Cargando...</p>
+        <Loader2 size={20} strokeWidth={2} className="animate-spin text-white/40" />
       </div>
     );
   }
@@ -119,7 +125,8 @@ export default function OTsPage() {
             OTs
           </h1>
           <PrimaryButton onClick={() => navigate('/ots/nueva')}>
-            + NUEVA OT
+            <Plus size={16} strokeWidth={2} />
+            NUEVA OT
           </PrimaryButton>
         </div>
 
@@ -190,10 +197,8 @@ export default function OTsPage() {
 
                   {/* NOMBRE */}
                   <td className="pr-4">
-                    {/* TODO: El backend no tiene un campo "nombre" en el JobSchema.
-                        Cuando se añada (ej: job.name), reemplazar este placeholder. */}
                     <span className="font-sans text-sm font-bold text-white truncate block max-w-[240px]">
-                      OT sin nombre
+                      {job.name || 'Sin nombre'}
                     </span>
                   </td>
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Upload, FileText, Play, Loader2, X } from 'lucide-react';
 import {
   Breadcrumbs,
   TechnicalLabel,
@@ -154,7 +155,7 @@ export function NuevaOTPage() {
     setPhase('creating');
 
     try {
-      const result = await createJob.mutateAsync();
+      const result = await createJob.mutateAsync({ name: nombre.trim() });
       setJobId(result.job_id);
       setPhase('uploading');
     } catch {
@@ -266,6 +267,7 @@ export function NuevaOTPage() {
                 : 'border-white/[0.12] bg-white/[0.02]'
             }`}
           >
+            <Upload size={40} strokeWidth={1.5} className="text-white/20 mb-3" />
             <span className="font-sans text-[15px] text-white/60">
               Arrastra PDFs aquí o haz clic para seleccionar
             </span>
@@ -313,7 +315,8 @@ export function NuevaOTPage() {
                 key={lf.id}
                 className="flex items-center justify-between border-b border-white/[0.04] py-2"
               >
-                <div className="mr-4 min-w-0 flex-1">
+                <div className="mr-4 min-w-0 flex-1 flex items-center gap-2">
+                  <FileText size={16} strokeWidth={2} className="text-white/30 shrink-0" />
                   <span className="block truncate font-sans text-sm text-white/85">
                     {lf.file.name}
                   </span>
@@ -333,7 +336,7 @@ export function NuevaOTPage() {
                     className="text-white/30 transition-colors duration-150 hover:text-white/60"
                     aria-label={`Quitar ${lf.file.name}`}
                   >
-                    ×
+                    <X size={14} strokeWidth={2} />
                   </button>
                 </div>
               </div>
@@ -406,6 +409,11 @@ export function NuevaOTPage() {
           onClick={handleSubmit}
           disabled={!canSubmit || phase !== 'idle'}
         >
+          {phase === 'idle' ? (
+            <Play size={16} strokeWidth={2} />
+          ) : (
+            <Loader2 size={16} strokeWidth={2} className="animate-spin" />
+          )}
           {phase === 'creating'
             ? 'Creando OT...'
             : phase === 'uploading'

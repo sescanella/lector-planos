@@ -25,6 +25,7 @@ export function PrimaryButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
+        'inline-flex items-center justify-center gap-2',
         'bg-accent text-white font-sans text-sm font-bold tracking-[0.15em] uppercase',
         'rounded-none px-6 py-3',
         'transition-colors duration-150 ease-in-out',

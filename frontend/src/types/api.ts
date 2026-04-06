@@ -28,6 +28,7 @@ export const JobFileSchema = z.object({
 
 export const JobSchema = z.object({
   job_id: z.string().uuid(),
+  name: z.string().nullable().optional(),
   status: JobStatusSchema,
   created_at: z.string(),
   completed_at: z.string().nullable().optional(),
@@ -47,6 +48,7 @@ export const JobListSchema = z.object({
 
 export const CreateJobSchema = z.object({
   job_id: z.string().uuid(),
+  name: z.string().nullable().optional(),
   status: JobStatusSchema,
   created_at: z.string(),
   webhook_url: z.string().nullable().optional(),

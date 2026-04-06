@@ -25,7 +25,7 @@ export function JobsPage() {
   const handleFiles = async (files: File[]) => {
     try {
       if (!jobId) {
-        const job = await createJob.mutateAsync();
+        const job = await createJob.mutateAsync({});
         setJobId(job.job_id);
         upload.addFiles(files);
       } else {

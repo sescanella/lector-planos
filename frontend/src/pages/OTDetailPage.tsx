@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Download, Loader2, ChevronRight, FileText, AlertCircle } from 'lucide-react';
 import { useJob } from '@/api/jobs';
 import { useCreateExport, useExportStatus } from '@/api/exports';
 import {
@@ -134,9 +135,11 @@ function FileList({ files }: { files: JobFile[] }) {
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 cursor-pointer group"
       >
-        <span className="font-sans text-white/40 text-sm">
-          {expanded ? '\u25BE' : '\u25B8'}
-        </span>
+        <ChevronRight
+          size={16}
+          strokeWidth={2}
+          className={`text-white/40 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
+        />
         <span className="font-sans text-sm text-white/40 group-hover:text-white/60 transition-colors duration-150">
           Ver planos individuales ({files.length})
         </span>
@@ -148,6 +151,7 @@ function FileList({ files }: { files: JobFile[] }) {
             const failed = file.status === 'failed';
             return (
               <div key={file.file_id} className="flex items-center gap-3 py-1">
+                <FileText size={16} strokeWidth={2} className="text-white/30 shrink-0" />
                 <span className="font-sans text-sm text-white/60 truncate max-w-[300px]">
                   {file.filename}
                 </span>
@@ -164,9 +168,12 @@ function FileList({ files }: { files: JobFile[] }) {
                   animated={false}
                 />
                 {failed && (
-                  <span className="font-heading text-[11px] text-[#F87171]/80">
-                    Error en procesamiento
-                  </span>
+                  <>
+                    <AlertCircle size={14} strokeWidth={2} className="text-[#F87171] shrink-0" />
+                    <span className="font-heading text-[11px] text-[#F87171]/80">
+                      Error en procesamiento
+                    </span>
+                  </>
                 )}
               </div>
             );
@@ -310,7 +317,7 @@ export default function OTDetailPage() {
   if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="font-sans text-[15px] text-white/40">Cargando...</p>
+        <Loader2 size={20} strokeWidth={2} className="animate-spin text-white/40" />
       </div>
     );
   }
@@ -363,10 +370,8 @@ export default function OTDetailPage() {
 
       {/* Header row */}
       <div className="mt-6 flex items-center justify-between">
-        {/* TODO: El backend no tiene un campo "nombre" en el JobSchema.
-            Cuando se añada (ej: job.name), reemplazar este placeholder. */}
         <h1 className="font-sans text-[clamp(1.25rem,2vw,1.75rem)] font-bold text-white">
-          OT sin nombre
+          {job.name || shortId}
         </h1>
         <StateBadge status={uiStatus!} animated={processing} />
       </div>
@@ -499,6 +504,11 @@ function ResultMode({ job, uiStatus }: { job: JobDetail; uiStatus: BadgeStatus }
             disabled={downloadState !== 'idle'}
             fullWidth
           >
+            {downloadState === 'idle' ? (
+              <Download size={16} strokeWidth={2} />
+            ) : (
+              <Loader2 size={16} strokeWidth={2} className="animate-spin" />
+            )}
             {downloadButtonLabel(
               downloadState,
               isPartial,
