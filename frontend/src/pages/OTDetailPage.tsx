@@ -29,12 +29,12 @@ function formatCountdown(totalSec: number): string {
 /** Live countdown hook: 69 seconds per remaining file, ticks every second */
 function useCountdown(processedCount: number, fileCount: number): string {
   const remaining = fileCount - processedCount;
-  const initialSec = remaining * 69;
+  const initialSec = remaining * 43;
   const [secondsLeft, setSecondsLeft] = useState(initialSec);
 
   // Reset when processed count changes (a file finished)
   useEffect(() => {
-    setSecondsLeft((fileCount - processedCount) * 69);
+    setSecondsLeft((fileCount - processedCount) * 43);
   }, [processedCount, fileCount]);
 
   // Tick every second
