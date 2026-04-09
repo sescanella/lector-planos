@@ -17,17 +17,35 @@ import { otDisplayName, mapStatus, isValidDownloadUrl } from '@/lib/ot-helpers';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Estimate remaining time: 69 seconds per remaining file, returns min + seg */
-function calcETA(processedCount: number, fileCount: number): string {
-  const remaining = fileCount - processedCount;
-  if (remaining <= 0) return '~1 min 0 seg';
-
-  const totalSec = remaining * 69;
+/** Format seconds as "X min Y seg" */
+function formatCountdown(totalSec: number): string {
+  if (totalSec <= 0) return '< 1 seg';
   const min = Math.floor(totalSec / 60);
   const sec = totalSec % 60;
+  if (min === 0) return `${sec} seg`;
+  return `${min} min ${sec} seg`;
+}
 
-  if (min === 0) return `~${sec} seg`;
-  return `~${min} min ${sec} seg`;
+/** Live countdown hook: 69 seconds per remaining file, ticks every second */
+function useCountdown(processedCount: number, fileCount: number): string {
+  const remaining = fileCount - processedCount;
+  const initialSec = remaining * 69;
+  const [secondsLeft, setSecondsLeft] = useState(initialSec);
+
+  // Reset when processed count changes (a file finished)
+  useEffect(() => {
+    setSecondsLeft((fileCount - processedCount) * 69);
+  }, [processedCount, fileCount]);
+
+  // Tick every second
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSecondsLeft((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return formatCountdown(secondsLeft);
 }
 
 const PROCESSING_MESSAGES = [
@@ -350,7 +368,7 @@ export default function OTDetailPage() {
 // ---------------------------------------------------------------------------
 
 function ProcessingMode({ job }: { job: JobDetail }) {
-  const eta = calcETA(job.processed_count, job.file_count);
+  const countdown = useCountdown(job.processed_count, job.file_count);
   const files = job.files ?? [];
 
   // Rotating status messages to keep the screen feeling alive
@@ -429,8 +447,8 @@ function ProcessingMode({ job }: { job: JobDetail }) {
           Tiempo estimado
         </span>
         <div className="w-px h-3 bg-white/10" />
-        <span className="font-heading text-[13px] font-semibold text-white/70">
-          {eta}
+        <span className="font-heading text-[13px] font-semibold text-white/70 tabular-nums">
+          {countdown}
         </span>
       </div>
 
