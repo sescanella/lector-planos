@@ -6,8 +6,6 @@ import { useCreateExport, useExportStatus } from '@/api/exports';
 import {
   Breadcrumbs,
   StateBadge,
-  ProgressBar,
-  AnimatedCounter,
   PrimaryButton,
   ErrorBanner,
 } from '@/components/kronos';
@@ -19,20 +17,27 @@ import { otDisplayName, mapStatus, isValidDownloadUrl } from '@/lib/ot-helpers';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Estimate remaining time: 69 seconds per remaining file */
+/** Estimate remaining time: 69 seconds per remaining file, returns min + seg */
 function calcETA(processedCount: number, fileCount: number): string {
   const remaining = fileCount - processedCount;
-  if (remaining <= 0) return '~1 MIN';
+  if (remaining <= 0) return '~1 min 0 seg';
 
   const totalSec = remaining * 69;
-  const min = Math.ceil(totalSec / 60);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
 
-  if (min < 60) return `~${min} MIN`;
-
-  const hours = Math.floor(min / 60);
-  const mins = min % 60;
-  return mins > 0 ? `~${hours} H ${mins} MIN` : `~${hours} H`;
+  if (min === 0) return `~${sec} seg`;
+  return `~${min} min ${sec} seg`;
 }
+
+const PROCESSING_MESSAGES = [
+  'Analizando planos con IA',
+  'Extrayendo tablas de materiales',
+  'Leyendo datos de soldaduras',
+  'Identificando cortes y medidas',
+  'Procesando cajetín del plano',
+  'Validando datos extraídos',
+];
 
 /** Calculate processing duration from created_at to completed_at */
 function calcDuration(createdAt: string, completedAt: string | null | undefined): string | null {
@@ -345,68 +350,101 @@ export default function OTDetailPage() {
 // ---------------------------------------------------------------------------
 
 function ProcessingMode({ job }: { job: JobDetail }) {
-  const progressPct =
-    job.file_count > 0
-      ? Math.round((job.processed_count / job.file_count) * 100)
-      : 0;
-
   const eta = calcETA(job.processed_count, job.file_count);
   const files = job.files ?? [];
 
+  // Rotating status messages to keep the screen feeling alive
+  const [msgIndex, setMsgIndex] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setMsgIndex((i) => (i + 1) % PROCESSING_MESSAGES.length);
+    }, 4000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
-    <div aria-live="polite" aria-atomic="true" className="mt-12 flex flex-col items-center">
-      {/* Pulse animation */}
+    <div aria-live="polite" aria-atomic="true" className="mt-16 flex flex-col items-center">
       <style>{`
-        @keyframes processingPulse {
-          0%, 100% { opacity: 0.15; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(1.05); }
+        @keyframes breathe {
+          0%, 100% { opacity: 0.08; transform: scale(0.92); }
+          50% { opacity: 0.25; transform: scale(1.08); }
         }
-        @keyframes processingRing {
+        @keyframes spin1 {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+        @keyframes spin2 {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(-360deg); }
+        }
+        @keyframes msgFade {
+          0% { opacity: 0; transform: translateY(4px); }
+          15% { opacity: 1; transform: translateY(0); }
+          85% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-4px); }
+        }
       `}</style>
 
-      {/* Animated loader */}
-      <div className="relative w-32 h-32 flex items-center justify-center">
-        {/* Outer pulse */}
+      {/* Animated orb */}
+      <div className="relative w-40 h-40 flex items-center justify-center">
+        {/* Breathing glow */}
         <div
-          className="absolute inset-0 rounded-full border border-accent/20"
-          style={{ animation: 'processingPulse 3s ease-in-out infinite' }}
+          className="absolute inset-0 rounded-full bg-accent/30 blur-xl"
+          style={{ animation: 'breathe 4s ease-in-out infinite' }}
         />
-        {/* Spinning ring */}
+        {/* Outer ring — slow */}
         <div
-          className="absolute inset-2 rounded-full border-2 border-transparent border-t-accent/60"
-          style={{ animation: 'processingRing 2s linear infinite' }}
-        />
-        {/* Center counter */}
-        <div className="flex flex-col items-center">
-          <span className="font-heading text-2xl font-semibold text-white">
-            <AnimatedCounter value={job.processed_count} format={(n) => String(Math.round(n))} />
-            <span className="text-white/30">/{job.file_count}</span>
+          className="absolute inset-0 rounded-full border border-white/[0.06]"
+          style={{ animation: 'spin1 12s linear infinite' }}
+        >
+          <div className="absolute -top-px left-1/2 -translate-x-1/2 w-6 h-px bg-accent/50" />
+        </div>
+        {/* Inner ring — faster, opposite */}
+        <div
+          className="absolute inset-4 rounded-full border border-white/[0.08]"
+          style={{ animation: 'spin2 8s linear infinite' }}
+        >
+          <div className="absolute -top-px left-1/2 -translate-x-1/2 w-4 h-px bg-accent/40" />
+        </div>
+        {/* Center content */}
+        <div className="relative flex flex-col items-center gap-1">
+          <span className="font-heading text-[11px] font-semibold tracking-[0.2em] uppercase text-white/30">
+            {job.file_count} {job.file_count === 1 ? 'plano' : 'planos'}
           </span>
         </div>
       </div>
 
-      {/* Label */}
-      <p className="mt-6 font-heading text-[11px] font-semibold tracking-[0.25em] uppercase text-white/40">
-        Procesando planos
+      {/* Rotating message */}
+      <p
+        key={msgIndex}
+        className="mt-8 font-sans text-[15px] text-white/50 h-6"
+        style={{ animation: 'msgFade 4s ease-in-out' }}
+      >
+        {PROCESSING_MESSAGES[msgIndex]}...
       </p>
 
-      {/* Progress bar */}
-      <div className="mt-6 w-full max-w-sm">
-        <ProgressBar value={progressPct} />
+      {/* ETA pill */}
+      <div className="mt-6 inline-flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-5 py-2.5">
+        <span className="font-heading text-[11px] tracking-[0.15em] uppercase text-white/30">
+          Tiempo estimado
+        </span>
+        <div className="w-px h-3 bg-white/10" />
+        <span className="font-heading text-[13px] font-semibold text-white/70">
+          {eta}
+        </span>
       </div>
 
-      {/* ETA */}
-      <p className="mt-4 font-heading text-[11px] tracking-[0.08em] text-white/40">
-        Tiempo estimado: <span className="text-white/60">{eta}</span>
+      {/* Subtle reassurance */}
+      <p className="mt-4 font-heading text-[10px] tracking-[0.15em] uppercase text-white/20">
+        No cierres esta pestaña
       </p>
 
       {/* Individual errors during processing */}
-      <div className="mt-4 w-full max-w-2xl">
-        <ProcessingErrors files={files} />
-      </div>
+      {files.length > 0 && (
+        <div className="mt-6 w-full max-w-2xl">
+          <ProcessingErrors files={files} />
+        </div>
+      )}
     </div>
   );
 }
