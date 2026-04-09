@@ -95,7 +95,7 @@ export class VisionFatalError extends Error {
 // ── Prompt ──────────────────────────────────────────────────────────────────
 
 const EXTRACTION_PROMPT = `You are analyzing 4 cropped regions from a single engineering spool drawing (plano técnico de piping).
-The images are, in order: (1) upper-right tables area, (2) center-right tables area, (3) lower-right tables area, (4) title block (cajetín).
+The images are, in order: (1) upper-right tables area, (2) center-right tables area, (3) lower-right tables area, (4) full bottom strip including OT/OF line and title block (cajetín).
 
 These crops OVERLAP — a table row may appear in more than one image. Extract each row EXACTLY ONCE.
 

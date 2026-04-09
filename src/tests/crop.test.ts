@@ -18,15 +18,14 @@ describe('bboxToPixels', () => {
   });
 
   it('converts cajetin region to correct pixel coordinates', () => {
-    const region = FIXED_CROPS[3]; // cajetin: 50-100% x, 80-100% y, 800 DPI
-    const scale = 800 / 72;
+    const region = FIXED_CROPS[3]; // cajetin: 0-100% x, 75-100% y, 800 DPI
     const result = bboxToPixels(region, A3_WIDTH_PTS, A3_HEIGHT_PTS);
 
-    expect(result.x).toBe(Math.round(0.50 * A3_WIDTH_PTS * scale));
-    expect(result.y).toBe(Math.round(0.80 * A3_HEIGHT_PTS * scale));
-    expect(result.width).toBe(Math.round(0.50 * A3_WIDTH_PTS * scale));
-    expect(result.height).toBe(Math.round(0.20 * A3_HEIGHT_PTS * scale));
-    expect(result.effectiveDpi).toBe(800);
+    // Full-width at 800 DPI exceeds 7000px max, so DPI is reduced by OOM guard
+    expect(result.effectiveDpi).toBeLessThan(800);
+    expect(result.x).toBe(0);
+    expect(result.width).toBeGreaterThan(0);
+    expect(result.height).toBeGreaterThan(0);
   });
 
   it('converts right_center overlap region correctly', () => {
@@ -84,11 +83,16 @@ describe('bboxToPixels', () => {
     expect(result.effectiveDpi).toBe(300);
   });
 
-  it('does not reduce DPI for normal A3 page with fixed crops', () => {
-    for (const region of FIXED_CROPS) {
+  it('does not reduce DPI for normal A3 page with table crops', () => {
+    // Table crops (right-side, partial width) should not trigger OOM guard
+    for (const region of FIXED_CROPS.slice(0, 3)) {
       const result = bboxToPixels(region, A3_WIDTH_PTS, A3_HEIGHT_PTS);
       expect(result.effectiveDpi).toBe(region.dpi);
     }
+    // Cajetin crop (full-width) triggers OOM guard at 800 DPI on A3
+    const cajetin = FIXED_CROPS[3];
+    const result = bboxToPixels(cajetin, A3_WIDTH_PTS, A3_HEIGHT_PTS);
+    expect(result.effectiveDpi).toBeLessThan(cajetin.dpi);
   });
 
   it('computes pixel coordinates using (pct/100) * pts * (dpi/72) formula', () => {

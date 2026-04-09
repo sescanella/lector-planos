@@ -37,7 +37,7 @@ export function getFixedCrops(): CropRegion[] {
     { id: 'right_upper',     leftPct: 45, topPct:  0, rightPct: 100, bottomPct: 40, dpi: env.CROP_DPI },
     { id: 'right_center',    leftPct: 45, topPct: 20, rightPct: 100, bottomPct: 60, dpi: env.CROP_DPI },
     { id: 'right_lower',     leftPct: 45, topPct: 45, rightPct: 100, bottomPct: 82, dpi: env.CROP_DPI },
-    { id: 'cajetin_titleblk', leftPct: 50, topPct: 80, rightPct: 100, bottomPct: 100, dpi: env.CAJETIN_DPI },
+    { id: 'cajetin_titleblk', leftPct: 0, topPct: 75, rightPct: 100, bottomPct: 100, dpi: env.CAJETIN_DPI },
   ];
 }
 
@@ -46,7 +46,7 @@ export const FIXED_CROPS: readonly CropRegion[] = [
   { id: 'right_upper',     leftPct: 45, topPct:  0, rightPct: 100, bottomPct: 40, dpi: 600 },
   { id: 'right_center',    leftPct: 45, topPct: 20, rightPct: 100, bottomPct: 60, dpi: 600 },
   { id: 'right_lower',     leftPct: 45, topPct: 45, rightPct: 100, bottomPct: 82, dpi: 600 },
-  { id: 'cajetin_titleblk', leftPct: 50, topPct: 80, rightPct: 100, bottomPct: 100, dpi: 800 },
+  { id: 'cajetin_titleblk', leftPct: 0, topPct: 75, rightPct: 100, bottomPct: 100, dpi: 800 },
 ] as const;
 
 // Claude Vision API limits: 8000px max dimension, 5MB max base64 per image.
