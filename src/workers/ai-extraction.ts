@@ -359,7 +359,8 @@ export function createAiExtractionProcessor(): AiProcessorFn {
                confidence_score = $3,
                extraction_data = $4,
                drawing_format = $5,
-               spool_number = COALESCE($6, spool_number)
+               spool_number = COALESCE($6, spool_number),
+               extraction_status = CASE WHEN $2 IN ('completed', 'completed_partial') THEN 'extracted' ELSE extraction_status END
            WHERE spool_id = $1`,
           [
             spoolId,

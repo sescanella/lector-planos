@@ -126,12 +126,24 @@ From these images, extract ALL structured data into this JSON schema:
   "overallConfidence": 0.0
 }
 
-RULES:
+TABLE RULES:
 - Map headers to canonical field names: PT NO→item, DIA (IN)→diameter, CMDTY CODE→code, CANT.→quantity, N COLADA→heatNumber, DIAM.→diameter, CODIGO→code, CANTIDAD→quantity
 - If materials split into "MATERIAL DE TALLER" + "MATERIAL DE CAMPO", set source="taller" or "campo" per row
 - If a table does not exist in any image, set that section to null (not empty array)
 - If a table has headers but zero data rows, set rows=[] and totalRowsDetected=0
 - Blank/unfilled fields (common in pre-fabrication drawings) should be null, not empty string
+
+CAJETÍN (TITLE BLOCK) RULES — use image (4) only:
+- ot: The field labeled "OT:", "N° OT", or "ORDEN DE TRABAJO" — a numeric/alphanumeric code, typically format "76400-XXXXXX" or similar. It is NOT the "REFERENCIA P&ID" (which looks like "1002-03-ID-EPC-..."). It is NOT the "ORDEN DE COMPRA".
+- of: The field labeled "OF:", "N° OF", or "ORDEN DE FABRICACIÓN" — a short numeric code (4-6 digits, e.g. "20832"). It is NOT "NOTA DE VENTA" and NOT "ORDEN DE COMPRA".
+- tagSpool: The spool identifier, labeled "TAG SPOOL:" or in the bottom-right area (e.g. "MK-1414-TA-29675-001-R").
+- diameter: ONLY the nominal pipe size as a number with inch symbol (e.g. "3\"", "8\"", "12\""). Extract from the "N° LÍNEA" or "LÍNEA" prefix if no separate diameter field exists. NEVER include the full line designation.
+- line: The FULL line designation string (e.g. "3\"-TA-1414-SR2-29675", "8\"-PW-1414-LL18-13774"). This is the "N° LÍNEA" or "LÍNEA" field.
+- client: The main contractor, labeled "CLIENTE" or visible in the logo area (e.g. "Fluor-Salfa").
+- endClient: The end/final client, labeled "CLIENTE FINAL" or "PROPIETARIO" (e.g. "CENTINELA").
+- revision: The CURRENT/LATEST revision number, usually "0", "1", "A", "B" — found in the revision block. If multiple revisions exist, take the most recent one.
+
+GENERAL RULES:
 - Confidence per row: 0.9-1.0=clear text, 0.7-0.9=mostly legible, 0.5-0.7=uncertain, <0.5=guessing
 - Respond ONLY with valid JSON. No markdown, no explanation, no text before or after the JSON.`;
 

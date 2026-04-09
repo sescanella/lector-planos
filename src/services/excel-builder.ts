@@ -82,6 +82,8 @@ function cellValue(val: unknown): string | number | null {
   return String(val);
 }
 
+const RESERVED_SHEET_NAMES = new Set(['resumen', 'materiales', 'soldaduras', 'cortes']);
+
 function deduplicateSheetNames(names: string[]): string[] {
   // Pass 1: sanitize + truncate, count occurrences per normalized key
   const sanitized = names.map(raw => {
@@ -95,7 +97,15 @@ function deduplicateSheetNames(names: string[]): string[] {
     freq.set(key, (freq.get(key) ?? 0) + 1);
   }
 
-  // Pass 2: assign suffixes only to keys with duplicates
+  // Mark reserved names as duplicates so they always get a suffix
+  for (const name of sanitized) {
+    const key = name.toLowerCase();
+    if (RESERVED_SHEET_NAMES.has(key)) {
+      freq.set(key, Math.max(freq.get(key) ?? 0, 2));
+    }
+  }
+
+  // Pass 2: assign suffixes only to keys with duplicates or reserved collisions
   const counts = new Map<string, number>();
   return sanitized.map(name => {
     const key = name.toLowerCase();
@@ -165,6 +175,11 @@ export async function buildExcelWorkbook(
 
   resumen.commit();
 
+  // ── Consolidated sheets (all spools combined) ─────────────────────────
+  writeConsolidatedSheet(workbook, 'Materiales', MATERIALES_MAPPING, spools, 'materials', options.includeConfidence);
+  writeConsolidatedSheet(workbook, 'Soldaduras', SOLDADURAS_MAPPING, spools, 'welds', options.includeConfidence);
+  writeConsolidatedSheet(workbook, 'Cortes', CORTES_MAPPING, spools, 'cuts', options.includeConfidence);
+
   // ── Per-spool sheets ──────────────────────────────────────────────────
   const rawNames = spools.map(s => s.spoolNumber || 'Sin-Nombre');
   const sheetNames = deduplicateSheetNames(rawNames);
@@ -211,6 +226,46 @@ export async function buildExcelWorkbook(
 
   const fileStat = await stat(outputPath);
   return { fileSizeBytes: fileStat.size };
+}
+
+function writeConsolidatedSheet(
+  workbook: ExcelJS.stream.xlsx.WorkbookWriter,
+  sheetName: string,
+  mapping: [string, string][],
+  spools: SpoolExportData[],
+  dataKey: 'materials' | 'welds' | 'cuts',
+  includeConfidence: boolean,
+): void {
+  const sheet = workbook.addWorksheet(sheetName);
+
+  // Header: Spool + mapped columns + optional confidence
+  const headerCols = ['Spool', ...mapping.map(([display]) => display)];
+  if (includeConfidence) headerCols.push('Confianza (%)');
+  const hRow = sheet.addRow(headerCols);
+  boldRow(hRow);
+  hRow.commit();
+
+  let totalRows = 0;
+  for (const spool of spools) {
+    const rows = spool[dataKey];
+    for (const row of rows) {
+      const values: (string | number | null)[] = [
+        spool.spoolNumber,
+        ...mapping.map(([, key]) => cellValue(extractField(row.rawData, key))),
+      ];
+      if (includeConfidence) {
+        values.push(confidencePercent(row.confidenceScore));
+      }
+      sheet.addRow(values).commit();
+      totalRows++;
+    }
+  }
+
+  if (totalRows === 0) {
+    sheet.addRow(['Sin datos']).commit();
+  }
+
+  sheet.commit();
 }
 
 function writeSectionTable(
