@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   HeadBucketCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Upload } from '@aws-sdk/lib-storage';
@@ -235,4 +236,46 @@ export async function getExportPresignedUrl(
     { expiresIn: env.EXPORT_PRESIGNED_EXPIRY_SECS }
   );
   return url;
+}
+
+/** Delete a single S3 object by key. Silently ignores if the object doesn't exist. */
+export async function deleteS3Object(s3Key: string): Promise<void> {
+  const s3 = getClient();
+  await s3.send(new DeleteObjectCommand({
+    Bucket: env.S3_BUCKET_NAME,
+    Key: s3Key,
+  }));
+  console.log(`S3 delete: ${s3Key}`);
+}
+
+/** Delete all S3 objects under a prefix (e.g. "uploads/{jobId}/"). */
+export async function deleteByPrefix(prefix: string): Promise<number> {
+  const s3 = getClient();
+  let deleted = 0;
+  let continuationToken: string | undefined;
+
+  do {
+    const list = await s3.send(new ListObjectsV2Command({
+      Bucket: env.S3_BUCKET_NAME,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    }));
+
+    for (const obj of list.Contents ?? []) {
+      if (obj.Key) {
+        await s3.send(new DeleteObjectCommand({
+          Bucket: env.S3_BUCKET_NAME,
+          Key: obj.Key,
+        }));
+        deleted++;
+      }
+    }
+
+    continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  if (deleted > 0) {
+    console.log(`S3 prefix delete: ${prefix} (${deleted} objects)`);
+  }
+  return deleted;
 }

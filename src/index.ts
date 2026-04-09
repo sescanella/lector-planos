@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import multer from 'multer';
-import path from 'path';
 import { env } from './config/env';
 import { checkDatabaseConnection, getPool, initDatabase } from './db';
 import { initQueue, shutdownQueue, startWorker, startAiWorker, startExcelWorker, checkRedisConnection, addAiExtractionJob, addExtractionJob } from './services/queue';
@@ -23,7 +22,7 @@ app.set('trust proxy', 1);
 
 app.use(cors({
   origin: env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(',').map(s => s.trim()).filter(Boolean),
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'DELETE'],
   allowedHeaders: ['Content-Type', 'X-API-Key'],
 }));
 app.use(express.json({ limit: '100kb' }));
@@ -56,10 +55,10 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/v1', apiLimiter);
 
-// Serve static frontend files (public/index.html serves at /)
-// Service info is available at GET /health
-// NOTE: Frontend auth must use session-based flow or OAuth — never expose API_KEY via endpoints
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// Service info
+app.get('/', (_req, res) => {
+  res.json({ service: 'lector-planos', version: '1.0.0' });
+});
 
 // Health check
 app.get('/health', async (_req, res) => {

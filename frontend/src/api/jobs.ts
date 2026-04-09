@@ -25,7 +25,6 @@ export function useJobs(page: number = 1) {
       const hasProcessing = jobs?.some(j => j.status === 'processing' || j.status === 'pending');
       return hasProcessing ? POLLING_INTERVALS.JOBS_PROCESSING : false;
     },
-    refetchOnWindowFocus: true,
   });
 }
 
@@ -43,7 +42,6 @@ export function useJob(jobId: string) {
         ? POLLING_INTERVALS.JOB_DETAIL_PROCESSING
         : false;
     },
-    refetchOnWindowFocus: true,
     enabled: !!jobId,
   });
 }
@@ -55,6 +53,18 @@ export function useCreateJob() {
       const body = params?.name ? { name: params.name } : {};
       const data = await apiClient.post('api/v1/jobs', { json: body }).json();
       return CreateJobSchema.parse(data);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
+export function useDeleteJob() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: async (jobId: string) => {
+      await apiClient.delete(`api/v1/jobs/${jobId}`);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });

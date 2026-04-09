@@ -1,9 +1,6 @@
 export { TechnicalLabel } from './TechnicalLabel';
 export type { TechnicalLabelProps } from './TechnicalLabel';
 
-export { TechnicalFooter } from './TechnicalFooter';
-export type { TechnicalFooterProps } from './TechnicalFooter';
-
 export { Breadcrumbs } from './Breadcrumbs';
 export type { BreadcrumbItem, BreadcrumbsProps } from './Breadcrumbs';
 

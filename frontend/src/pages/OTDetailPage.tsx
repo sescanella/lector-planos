@@ -14,35 +14,11 @@ import {
 } from '@/components/kronos';
 import type { BadgeStatus } from '@/components/kronos';
 import type { JobDetail, JobFile } from '@/types/api';
+import { otDisplayName, mapStatus, isValidDownloadUrl } from '@/lib/ot-helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Generate a short OT identifier from the last 4 chars of a UUID */
-function shortOTId(jobId: string): string {
-  return `OT-${jobId.slice(-4).toUpperCase()}`;
-}
-
-/** Map backend job status to UI badge status */
-function mapStatus(job: Pick<JobDetail, 'status' | 'processed_count' | 'file_count'>): BadgeStatus {
-  switch (job.status) {
-    case 'pending':
-    case 'processing':
-      return 'processing';
-    case 'completed':
-      return job.processed_count < job.file_count ? 'partial' : 'ready';
-    case 'failed':
-      return 'error';
-    default:
-      return 'error';
-  }
-}
-
-/** Check if we are in processing mode */
-function isProcessingMode(status: BadgeStatus): boolean {
-  return status === 'processing';
-}
 
 /** Calculate estimated time remaining */
 function calcETA(createdAt: string, processedCount: number, fileCount: number): string | null {
@@ -81,7 +57,6 @@ type DownloadState = 'idle' | 'creating' | 'polling' | 'downloading';
 function downloadButtonLabel(state: DownloadState, isPartial: boolean, processedCount: number, fileCount: number): string {
   switch (state) {
     case 'creating':
-      return 'GENERANDO...';
     case 'polling':
       return 'GENERANDO...';
     case 'downloading':
@@ -133,6 +108,8 @@ function FileList({ files }: { files: JobFile[] }) {
     <div className="mt-8">
       <button
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-controls="file-list-content"
         className="flex items-center gap-2 cursor-pointer group"
       >
         <ChevronRight
@@ -146,7 +123,7 @@ function FileList({ files }: { files: JobFile[] }) {
       </button>
 
       {expanded && (
-        <div className="mt-3 flex flex-col gap-1">
+        <div id="file-list-content" className="mt-3 flex flex-col gap-1">
           {files.map((file) => {
             const failed = file.status === 'failed';
             return (
@@ -169,8 +146,8 @@ function FileList({ files }: { files: JobFile[] }) {
                 />
                 {failed && (
                   <>
-                    <AlertCircle size={14} strokeWidth={2} className="text-[#F87171] shrink-0" />
-                    <span className="font-heading text-[11px] text-[#F87171]/80">
+                    <AlertCircle size={14} strokeWidth={2} className="text-state-error shrink-0" />
+                    <span className="font-heading text-[11px] text-state-error/80">
                       Error en procesamiento
                     </span>
                   </>
@@ -201,7 +178,7 @@ function ProcessingErrors({ files, maxVisible = 5 }: { files: JobFile[]; maxVisi
           <span className="font-sans text-sm text-white/60 truncate max-w-[260px]">
             {file.filename}
           </span>
-          <span className="font-heading text-[11px] text-[#F87171]/80">
+          <span className="font-heading text-[11px] text-state-error/80">
             Error en procesamiento
           </span>
         </div>
@@ -239,7 +216,9 @@ function useDownload(jobId: string) {
     ) {
       hasDownloaded.current = true;
       setDownloadState('downloading');
-      window.open(exportStatus.download_url, '_blank');
+      if (isValidDownloadUrl(exportStatus.download_url)) {
+        window.open(exportStatus.download_url, '_blank', 'noopener,noreferrer');
+      }
       // Reset after a short delay
       setTimeout(() => {
         setDownloadState('idle');
@@ -262,7 +241,9 @@ function useDownload(jobId: string) {
             // Export already ready (cached)
             hasDownloaded.current = true;
             setDownloadState('downloading');
-            window.open(data.download_url, '_blank');
+            if (isValidDownloadUrl(data.download_url)) {
+              window.open(data.download_url, '_blank', 'noopener,noreferrer');
+            }
             setTimeout(() => {
               setDownloadState('idle');
               hasDownloaded.current = false;
@@ -310,8 +291,8 @@ export default function OTDetailPage() {
     prevStatusRef.current = uiStatus;
   }, [uiStatus]);
 
-  const shortId = otId ? shortOTId(otId) : '';
-  const processing = uiStatus ? isProcessingMode(uiStatus) : false;
+  const displayName = job ? otDisplayName(job.name, job.job_id) : '';
+  const processing = uiStatus === 'processing';
 
   // -- Loading state --------------------------------------------------------
   if (isLoading) {
@@ -355,7 +336,7 @@ export default function OTDetailPage() {
       <Breadcrumbs
         items={[
           { label: 'OTs', href: '/ots' },
-          { label: shortId },
+          { label: displayName },
         ]}
       />
 
@@ -364,14 +345,14 @@ export default function OTDetailPage() {
         <TechnicalLabel
           system="SISTEMA 03"
           name={processing ? 'PROCESAMIENTO' : 'RESULTADO'}
-          metadata={shortId}
+          metadata={displayName}
         />
       </div>
 
       {/* Header row */}
       <div className="mt-6 flex items-center justify-between">
         <h1 className="font-sans text-[clamp(1.25rem,2vw,1.75rem)] font-bold text-white">
-          {job.name || shortId}
+          {job.name || displayName}
         </h1>
         <StateBadge status={uiStatus!} animated={processing} />
       </div>
@@ -413,7 +394,7 @@ function ProcessingMode({ job }: { job: JobDetail }) {
   const files = job.files ?? [];
 
   return (
-    <>
+    <div aria-live="polite" aria-atomic="true">
       {/* Counter grid 2x2 */}
       <div className="mt-8 grid grid-cols-2 gap-px max-w-2xl mx-auto">
         <CounterCell
@@ -453,7 +434,7 @@ function ProcessingMode({ job }: { job: JobDetail }) {
       <div className="max-w-2xl mx-auto">
         <ProcessingErrors files={files} />
       </div>
-    </>
+    </div>
   );
 }
 
@@ -480,7 +461,7 @@ function ResultMode({ job, uiStatus }: { job: JobDetail; uiStatus: BadgeStatus }
         <p className="font-heading text-[13px] text-white/60">
           {job.processed_count} planos procesados
           {isPartial && (
-            <span className="text-[#F87171]/80">
+            <span className="text-state-error/80">
               {' '}&middot; {failedCount} con errores
             </span>
           )}

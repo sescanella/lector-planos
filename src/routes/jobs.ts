@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { createReadStream } from 'fs';
 import { getPool } from '../db';
-import { uploadPdf, deletePdf } from '../services/s3';
+import { uploadPdf, deletePdf, deleteByPrefix, deleteS3Object } from '../services/s3';
 import { addExtractionJob } from '../services/queue';
 import { isValidUUID } from '../utils/validation';
 
@@ -453,6 +453,78 @@ router.get('/:jobId', async (req: Request, res: Response) => {
     res.json({ ...jobRows[0], files: fileRows });
   } catch (err) {
     console.error('Error getting job:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'internal_error', message: 'An unexpected error occurred' });
+  }
+});
+
+// DELETE /api/v1/jobs/:jobId — Delete a job and all associated data
+router.delete('/:jobId', async (req: Request, res: Response) => {
+  try {
+    const pool = getPool();
+    if (!pool) {
+      res.status(500).json({ error: 'internal_error', message: 'Database not available' });
+      return;
+    }
+
+    const jobId = req.params.jobId as string;
+    if (!isValidUUID(jobId)) {
+      res.status(400).json({ error: 'validation_error', message: 'Invalid job ID format' });
+      return;
+    }
+
+    // Check job exists and its status
+    const { rows: jobRows } = await pool.query(
+      'SELECT job_id, status, file_count FROM extraction_job WHERE job_id = $1',
+      [jobId]
+    );
+
+    if (jobRows.length === 0) {
+      res.status(404).json({ error: 'not_found', message: 'Resource not found', resource_id: jobId });
+      return;
+    }
+
+    const job = jobRows[0];
+
+    // Block deletion of jobs that are currently processing
+    if (job.status === 'processing' || job.status === 'pending') {
+      res.status(409).json({
+        error: 'invalid_state',
+        message: 'No se puede eliminar una OT que está en proceso. Espera a que termine.',
+        current_status: job.status,
+      });
+      return;
+    }
+
+    // 1. Collect export S3 keys before CASCADE deletes them
+    const { rows: exports } = await pool.query(
+      "SELECT s3_key FROM excel_export WHERE job_id = $1 AND s3_key IS NOT NULL",
+      [jobId]
+    );
+
+    // 2. Clean up S3: all uploads (PDFs + page images) under uploads/{jobId}/
+    try {
+      await deleteByPrefix(`uploads/${jobId}/`);
+    } catch (err) {
+      console.error(`S3 cleanup failed for uploads/${jobId}/:`, (err as Error).message);
+      // Continue — DB cleanup is more important than S3 cleanup
+    }
+
+    // 3. Clean up S3: export files
+    for (const exp of exports) {
+      try {
+        await deleteS3Object(exp.s3_key);
+      } catch (err) {
+        console.error(`S3 cleanup failed for export ${exp.s3_key}:`, (err as Error).message);
+      }
+    }
+
+    // 4. Delete from DB (CASCADE handles all child tables)
+    await pool.query('DELETE FROM extraction_job WHERE job_id = $1', [jobId]);
+
+    console.log(`Job deleted: ${jobId} (${job.file_count} files)`);
+    res.status(204).send();
+  } catch (err) {
+    console.error('Error deleting job:', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'internal_error', message: 'An unexpected error occurred' });
   }
 });

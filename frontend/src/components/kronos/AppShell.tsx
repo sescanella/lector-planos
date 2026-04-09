@@ -1,7 +1,6 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { TechnicalFooter } from './TechnicalFooter';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -22,12 +21,12 @@ export function AppShell({ children }: AppShellProps) {
       <header className="sticky top-0 z-30 border-b border-white/[0.12] bg-black/30 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 lg:px-12">
           {/* Logo */}
-          <div className="flex items-center gap-3">
+          <Link to="/ots" className="flex items-center gap-3 no-underline">
             <img src="/kronos-logo.svg" alt="Kronos Mining" className="h-5 w-auto" />
             <span className="font-heading text-[11px] font-semibold uppercase tracking-[0.3em] text-white/85">
               Kronos Mining
             </span>
-          </div>
+          </Link>
 
           {/* Logout */}
           <button
@@ -46,16 +45,6 @@ export function AppShell({ children }: AppShellProps) {
         {children}
       </main>
 
-      {/* Footer */}
-      <footer className="mx-auto w-full max-w-6xl px-6 py-6 lg:px-12">
-        <TechnicalFooter
-          items={[
-            'Lector de Planos · Kronos Mining',
-            'v1.0.0',
-            '2026',
-          ]}
-        />
-      </footer>
     </div>
   );
 }
