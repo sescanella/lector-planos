@@ -360,7 +360,7 @@ export function createAiExtractionProcessor(): AiProcessorFn {
                extraction_data = $4,
                drawing_format = $5,
                spool_number = COALESCE($6, spool_number),
-               extraction_status = CASE WHEN $2 IN ('completed', 'completed_partial') THEN 'extracted' ELSE extraction_status END
+               extraction_status = COALESCE($7, extraction_status)
            WHERE spool_id = $1`,
           [
             spoolId,
@@ -374,6 +374,7 @@ export function createAiExtractionProcessor(): AiProcessorFn {
             }),
             JSON.stringify(data.drawingFormat),
             data.cajetin.tagSpool || null,
+            (visionStatus === 'completed' || visionStatus === 'completed_partial') ? 'extracted' : null,
           ],
         );
 
