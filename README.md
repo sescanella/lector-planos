@@ -11,6 +11,12 @@ Web application that extracts structured data from engineering drawing PDFs (pip
 - **Vision AI**: Claude API for table/title block extraction
 - **Frontend**: React + Vite (Vercel)
 
+## Prerequisites
+
+- Node.js 22+
+- `poppler-utils` — PDF to image conversion (`brew install poppler` / `apk add poppler-utils`)
+- `tesseract` — Drawing classification OCR (`brew install tesseract` / `apk add tesseract-ocr`). Optional: app works without it but skips pre-classification.
+
 ## Setup
 
 ```bash

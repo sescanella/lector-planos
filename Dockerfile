@@ -12,7 +12,7 @@ RUN npm run build
 FROM node:22-alpine
 
 # Install poppler-utils for PDF-to-image conversion (pdftoppm)
-RUN apk add --no-cache poppler-utils poppler-data
+RUN apk add --no-cache poppler-utils poppler-data tesseract-ocr
 
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 

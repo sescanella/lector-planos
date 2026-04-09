@@ -18,6 +18,7 @@ import { addToAiDlq, pauseAiQueue, AiExtractionJobData } from '../services/queue
 import type { AiProcessorFn } from '../services/queue';
 import { streamToBuffer } from '../utils/stream';
 import { checkAndFinalizeJob } from '../utils/job-finalization';
+import { classifyDrawing, type ClassificationResult } from '../services/classify';
 
 // ── Sanity validation ───────────────────────────────────────────────────────
 
@@ -264,21 +265,43 @@ export function createAiExtractionProcessor(): AiProcessorFn {
       throw err;
     }
 
+    // 2.5 + 3-4. Classify and crop in parallel
+    let classification: ClassificationResult | null = null;
+    let crops: Map<string, Buffer>;
+
     try {
-      // 3-4. Crop 4 fixed regions
-      let crops: Map<string, Buffer>;
-      try {
-        crops = await cropRegionsFromPdf(pdfPath, pageNumber);
-      } catch (err) {
-        await pool.query(
-          `UPDATE spool SET vision_status = 'failed', extraction_data = $2 WHERE spool_id = $1`,
-          [spoolId, JSON.stringify({ error: `Crop failed: ${(err as Error).message}` })],
+      const [classResult, cropResult] = await Promise.all([
+        classifyDrawing(pdfPath, pageNumber).catch((err) => {
+          console.warn(`Classification failed for spool ${spoolId}:`, (err as Error).message);
+          return null;
+        }),
+        cropRegionsFromPdf(pdfPath, pageNumber),
+      ]);
+
+      classification = classResult;
+      crops = cropResult;
+
+      if (classification) {
+        console.log(
+          `Classification: spool=${spoolId}, family=${classification.family}, ` +
+          `confidence=${classification.confidence.toFixed(2)}, ` +
+          `keywords=[${classification.keywords.join(', ')}], ` +
+          `duration=${classification.durationMs}ms`,
         );
-        try { await checkAndFinalizeJob(jobId); } catch (e) {
-          console.warn(`Failed to check job finalization for ${jobId}:`, (e as Error).message);
-        }
-        throw err;
       }
+    } catch (err) {
+      // If cropRegionsFromPdf fails, handle as before
+      await pool.query(
+        `UPDATE spool SET vision_status = 'failed', extraction_data = $2 WHERE spool_id = $1`,
+        [spoolId, JSON.stringify({ error: `Crop failed: ${(err as Error).message}` })],
+      );
+      try { await checkAndFinalizeJob(jobId); } catch (e) {
+        console.warn(`Failed to check job finalization for ${jobId}:`, (e as Error).message);
+      }
+      throw err;
+    }
+
+    try {
 
       // 5. Atomic budget check — only proceed if under budget
       const { rows: budgetRows } = await pool.query(
@@ -301,7 +324,7 @@ export function createAiExtractionProcessor(): AiProcessorFn {
       // 6. Call Claude Vision API
       let result;
       try {
-        result = await extractFromCrops(crops);
+        result = await extractFromCrops(crops, classification?.family);
       } catch (err) {
         if (err instanceof VisionFatalError) {
           if (err.shouldPauseQueue) {
@@ -371,6 +394,12 @@ export function createAiExtractionProcessor(): AiProcessorFn {
               soldaduras: data.soldaduras,
               cortes: data.cortes,
               cajetin: data.cajetin,
+              ...(classification && { classification: {
+                family: classification.family,
+                confidence: classification.confidence,
+                keywords: classification.keywords,
+                durationMs: classification.durationMs,
+              }}),
             }),
             JSON.stringify(data.drawingFormat),
             data.cajetin.tagSpool || null,

@@ -129,31 +129,77 @@ From these images, extract ALL structured data into this JSON schema:
 TABLE RULES:
 - Map headers to canonical field names: PT NO→item, DIA (IN)→diameter, CMDTY CODE→code, CANT.→quantity, N COLADA→heatNumber, DIAM.→diameter, CODIGO→code, CANTIDAD→quantity
 - If materials split into "MATERIAL DE TALLER" + "MATERIAL DE CAMPO", set source="taller" or "campo" per row
+- Sections labeled "SOPORTES DE PIPING" or "INSTRUMENTOS" are ALSO materials — include them in the materiales rows with source=null
 - If a table does not exist in any image, set that section to null (not empty array)
 - If a table has headers but zero data rows, set rows=[] and totalRowsDetected=0
 - Blank/unfilled fields (common in pre-fabrication drawings) should be null, not empty string
 
 CAJETÍN (TITLE BLOCK) RULES — use image (4) only:
-- ot: The field labeled "OT:", "N° OT", or "ORDEN DE TRABAJO" — a numeric/alphanumeric code, typically format "76400-XXXXXX" or similar. It is NOT the "REFERENCIA P&ID" (which looks like "1002-03-ID-EPC-..."). It is NOT the "ORDEN DE COMPRA".
-- of: The field labeled "OF:", "N° OF", or "ORDEN DE FABRICACIÓN" — a short numeric code (4-6 digits, e.g. "20832"). It is NOT "NOTA DE VENTA" and NOT "ORDEN DE COMPRA".
-- tagSpool: The spool identifier, labeled "TAG SPOOL:" or in the bottom-right area (e.g. "MK-1414-TA-29675-001-R").
-- diameter: ONLY the nominal pipe size as a number with inch symbol (e.g. "3\"", "8\"", "12\""). Extract from the "N° LÍNEA" or "LÍNEA" prefix if no separate diameter field exists. NEVER include the full line designation.
-- line: The FULL line designation string (e.g. "3\"-TA-1414-SR2-29675", "8\"-PW-1414-LL18-13774"). This is the "N° LÍNEA" or "LÍNEA" field.
-- client: The main contractor, labeled "CLIENTE" or visible in the logo area (e.g. "Fluor-Salfa").
-- endClient: The end/final client, labeled "CLIENTE FINAL" or "PROPIETARIO" (e.g. "CENTINELA").
+- ot: The field labeled "OT:", "N° OT", or "ORDEN DE TRABAJO" — a numeric/alphanumeric code, typically format "76400-XXXXXX" or similar. It is NOT the "REFERENCIA P&ID" (which looks like "1002-03-ID-EPC-..."). It is NOT the "ORDEN DE COMPRA". If no such field exists in the drawing (e.g. EPC/Centinela format), set to null.
+- of: The field labeled "OF:", "N° OF", or "ORDEN DE FABRICACIÓN" — a short numeric code (4-6 digits, e.g. "20832"). It is NOT "NOTA DE VENTA" and NOT "ORDEN DE COMPRA". If no such field exists in the drawing (e.g. EPC/Centinela format), set to null.
+- tagSpool: The spool identifier. For MK/FastPack drawings: labeled "TAG SPOOL:" (e.g. "MK-1414-TA-29675-001-R"). For EPC/Centinela isometric drawings: look for the "MARCA DE PIEZA" section — list ALL spool marks separated by commas (e.g. "MK-1322-SL-22633-001, MK-1322-SL-22633-002"). A single isometric may contain 2-11 spools.
+- diameter: ONLY the nominal pipe size as a number with inch symbol (e.g. "3\"", "8\"", "12\""). Always include the inch symbol. Output '3"' not '3', '12"' not '12'. Extract from the "N° LÍNEA", "LÍNEA", or "NUMERO DE LINEA" prefix if no separate diameter field exists. NEVER include the full line designation.
+- line: The FULL line designation string (e.g. "3\"-TA-1414-SR2-29675", "12\"-PW-1251-LL18-20984"). This is the "N° LÍNEA", "LÍNEA", or "NUMERO DE LINEA" field.
+- client: The main contractor, labeled "CLIENTE" or visible in the logo area (e.g. "Fluor-Salfa"). For EPC/Centinela: look for "CONTRATO" field or project name (e.g. "ANTOFAGASTA MINERALS", "D3MC").
+- endClient: The end/final client, labeled "CLIENTE FINAL" or "PROPIETARIO" (e.g. "CENTINELA"). For EPC/Centinela: the project/mine name if visible (e.g. "CENTINELA").
 - revision: The CURRENT/LATEST revision number, usually "0", "1", "A", "B" — found in the revision block. If multiple revisions exist, take the most recent one.
 
 GENERAL RULES:
 - Confidence per row: 0.9-1.0=clear text, 0.7-0.9=mostly legible, 0.5-0.7=uncertain, <0.5=guessing
 - Respond ONLY with valid JSON. No markdown, no explanation, no text before or after the JSON.`;
 
-const STRICT_RETRY_PROMPT = `${EXTRACTION_PROMPT}
+/** Isometric-specific prompt: no soldaduras/cortes (validated: never exist in isometric drawings). */
+const ISOMETRIC_EXTRACTION_PROMPT = `You are analyzing 4 cropped regions from a single engineering isometric drawing (plano isométrico de piping).
+The images are, in order: (1) upper-right tables area, (2) center-right tables area, (3) lower-right tables area, (4) full bottom strip including title block (cajetín).
 
-CRITICAL: Your previous response was not valid JSON. Respond with ONLY the JSON object. No markdown fences, no explanations, no text before or after. Start with { and end with }.`;
+These crops OVERLAP — a table row may appear in more than one image. Extract each row EXACTLY ONCE.
+
+This is an ISOMETRIC drawing — it contains material lists only (no weld or cut tables). Set soldaduras and cortes to null.
+
+From these images, extract ALL structured data into this JSON schema:
+
+{
+  "materiales": {
+    "rows": [{ "item": "", "diameter": "", "code": "", "description": "", "quantity": "", "heatNumber": null, "source": "taller|campo|null", "confidence": 0.0 }],
+    "rawHeaders": ["exact column headers as seen"],
+    "totalRowsDetected": 0,
+    "confidence": 0.0,
+    "source": "single|taller_campo"
+  },
+  "soldaduras": null,
+  "cortes": null,
+  "cajetin": { "ot": null, "of": null, "tagSpool": null, "diameter": null, "client": null, "endClient": null, "line": null, "revision": null, "confidence": 0.0 },
+  "drawingFormat": { "paperSize": "A3|Tabloid|A1|Letter", "orientation": "landscape|portrait", "familyHint": "EPC/Centinela|MK/FastPack|Besalco/FP|unknown" },
+  "overallConfidence": 0.0
+}
+
+TABLE RULES:
+- Map headers to canonical field names: PT NO→item, DIA (IN)→diameter, CMDTY CODE→code, CANT.→quantity, N COLADA→heatNumber, DIAM.→diameter, CODIGO→code, CANTIDAD→quantity
+- If materials split into "MATERIAL DE TALLER" + "MATERIAL DE CAMPO", set source="taller" or "campo" per row
+- Sections labeled "SOPORTES DE PIPING" or "INSTRUMENTOS" are ALSO materials — include them in the materiales rows with source=null
+- If a table does not exist in any image, set that section to null (not empty array)
+- If a table has headers but zero data rows, set rows=[] and totalRowsDetected=0
+- Blank/unfilled fields (common in pre-fabrication drawings) should be null, not empty string
+
+CAJETÍN (TITLE BLOCK) RULES — use image (4) only:
+- ot: null (isometric drawings do not have OT field)
+- of: null (isometric drawings do not have OF field)
+- tagSpool: Look for "MARCA DE PIEZA" section in the materials area (images 1-2, below materials table). List ALL spool marks separated by commas (e.g. "MK-1322-SL-22633-001, MK-1322-SL-22633-002"). A single isometric may contain 2-11 spools.
+- diameter: ONLY the nominal pipe size as a number with inch symbol (e.g. "3\"", "8\"", "12\""). Always include the inch symbol. Output '3"' not '3', '12"' not '12'. Extract from the "NUMERO DE LINEA" prefix. NEVER include the full line designation.
+- line: The FULL line designation string (e.g. "3\"-SL-1322-SR2-22633", "12\"-PW-1251-LL18-20984"). This is the "NUMERO DE LINEA" field.
+- client: Look for "CONTRATO" field or project name (e.g. "ANTOFAGASTA MINERALS", "D3MC").
+- endClient: The project/mine name if visible (e.g. "CENTINELA").
+- revision: The CURRENT/LATEST revision number, usually "0", "1", "A", "B" — found in the revision block. If multiple revisions exist, take the most recent one.
+
+GENERAL RULES:
+- Confidence per row: 0.9-1.0=clear text, 0.7-0.9=mostly legible, 0.5-0.7=uncertain, <0.5=guessing
+- Respond ONLY with valid JSON. No markdown, no explanation, no text before or after the JSON.`;
+
+const STRICT_RETRY_SUFFIX = `\n\nCRITICAL: Your previous response was not valid JSON. Respond with ONLY the JSON object. No markdown fences, no explanations, no text before or after. Start with { and end with }.`;
 
 // ── Circuit breaker ─────────────────────────────────────────────────────────
 
-const CIRCUIT_BREAKER_THRESHOLD = 5;
+const CIRCUIT_BREAKER_THRESHOLD = 3;
 const CIRCUIT_BREAKER_WINDOW_MS = 60_000;
 const CIRCUIT_BREAKER_COOLDOWN_MS = 2 * 60_000;
 
@@ -255,6 +301,7 @@ export interface ExtractFromCropsResult {
  */
 export async function extractFromCrops(
   crops: Map<string, Buffer>,
+  family?: 'spool' | 'isometric' | 'unknown',
 ): Promise<ExtractFromCropsResult> {
   if (isCircuitOpen()) {
     throw new VisionRetryableError(
@@ -270,8 +317,9 @@ export async function extractFromCrops(
     }
   }
 
+  const basePrompt = (family === 'isometric') ? ISOMETRIC_EXTRACTION_PROMPT : EXTRACTION_PROMPT;
   let maxTokens = env.VISION_MAX_TOKENS;
-  let prompt = EXTRACTION_PROMPT;
+  let prompt = basePrompt;
   let attempts = 0;
   const MAX_ATTEMPTS = 2;
 
@@ -306,7 +354,7 @@ export async function extractFromCrops(
         if (newMax > maxTokens && attempts < MAX_ATTEMPTS) {
           console.warn(`Vision response truncated (max_tokens=${maxTokens}), retrying with ${newMax}`);
           maxTokens = newMax;
-          prompt = STRICT_RETRY_PROMPT;
+          prompt = basePrompt + STRICT_RETRY_SUFFIX;
           continue;
         }
       }
@@ -330,7 +378,7 @@ export async function extractFromCrops(
         // On parse failure, retry with stricter prompt
         if (attempts < MAX_ATTEMPTS) {
           console.warn('Vision response JSON parse failed, retrying with strict prompt');
-          prompt = STRICT_RETRY_PROMPT;
+          prompt = basePrompt + STRICT_RETRY_SUFFIX;
           continue;
         }
         throw parseErr;

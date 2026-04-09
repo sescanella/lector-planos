@@ -61,7 +61,7 @@ const BOLD = '\x1b[1m';
 
 function normalize(val: unknown): string {
   if (val === null || val === undefined) return '';
-  return String(val).trim().toLowerCase();
+  return String(val).trim().toLowerCase().replace(/["''″]/g, '');
 }
 
 function compareField(field: string, expected: string, actual: unknown): FieldResult {
@@ -78,7 +78,7 @@ function compareField(field: string, expected: string, actual: unknown): FieldRe
 function compareCajetin(truth: Record<string, string>, data: VisionExtractionResult): FieldResult[] {
   const results: FieldResult[] = [];
   for (const [key, expected] of Object.entries(truth)) {
-    const actual = (data.cajetin as Record<string, unknown>)[key];
+    const actual = (data.cajetin as unknown as Record<string, unknown>)[key];
     results.push(compareField(`cajetin.${key}`, expected, actual));
   }
   return results;

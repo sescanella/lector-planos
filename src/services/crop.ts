@@ -61,7 +61,7 @@ const CROP_TIMEOUT_MS = env.PDF_TIMEOUT_MS; // reuse existing env var
 // ---------------------------------------------------------------------------
 
 let popplerInstance: Poppler | null = null;
-function getPoppler(): Poppler {
+export function getPoppler(): Poppler {
   if (!popplerInstance) popplerInstance = new Poppler();
   return popplerInstance;
 }

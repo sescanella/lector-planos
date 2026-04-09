@@ -10,12 +10,16 @@ This is a scalable rewrite of the prototype at `../PDF-Listado-Materiales/`, whi
 
 ## Domain Context
 
-- **Planos tecnicos**: Single-page engineering drawings (piping spools) containing tables and a title block. They are rasterized images inside PDFs — no embedded text, OCR doesn't work.
-- **Key challenge**: Drawings are not standardized across clients. Table positions, layouts, and field names vary. The prototype solved this with fixed crop coordinates, but every new client format requires manual coordinate tuning.
-- **Four data regions per drawing**:
+- **Planos tecnicos**: Single-page engineering drawings containing tables and a title block. They are rasterized images inside PDFs — no embedded text, OCR doesn't work.
+- **Two drawing families**:
+  - **Spool (MK/FastPack, familia_b)**: 1 PDF = 1 spool. Has "TAG SPOOL:" field. Tables: ITEM, DIAM., CODIGO, CANTIDAD. Includes soldaduras + cortes tables.
+  - **Isometric (EPC/Centinela, familia_a)**: 1 PDF = N spools. Has "NUMERO ISOMETRICO" field. Tables: PT NO, DIA (IN), CMDTY CODE, CANT. Split into MATERIAL DE TALLER + MATERIAL DE CAMPO + SOPORTES DE PIPING. No soldaduras/cortes.
+- **Pre-classification**: `src/services/classify.ts` uses Tesseract OCR on a small title block crop to detect keywords ("TAG SPOOL" vs "NUMERO ISOMETRICO") and classify before the Vision API call. No AI cost.
+- **Key challenge**: Drawings are not standardized across clients. Table positions, layouts, and field names vary.
+- **Data regions per drawing**:
   - **Materiales** (materials list): ITEM, DIAM., CODIGO, DESCRIPCION, CANTIDAD, N COLADA
-  - **Soldaduras** (welds): N SOLD., DIAM., TIPO SOLD., WPS, FECHA SOLDADURA, SOLDADOR, FECHA INSP. VISUAL, RESULTADO
-  - **Cortes** (cuts): N CORTE, DIAM., LARGO, EXTREMO 1, EXTREMO 2
+  - **Soldaduras** (welds): N SOLD., DIAM., TIPO SOLD., WPS, FECHA SOLDADURA, SOLDADOR, FECHA INSP. VISUAL, RESULTADO (spool only)
+  - **Cortes** (cuts): N CORTE, DIAM., LARGO, EXTREMO 1, EXTREMO 2 (spool only)
   - **Cajetin** (title block): OT, OF, tag spool, diameter, client, end client, line
 
 ## Tech Stack
@@ -35,7 +39,7 @@ This is a scalable rewrite of the prototype at `../PDF-Listado-Materiales/`, whi
 
 - **Backend**: Express API handling PDF upload, job queue orchestration, and Excel generation
 - **Frontend**: Web UI for batch PDF upload (1-200 files) with processing status
-- **Processing pipeline**: PDF upload → S3 storage → BullMQ job → Vision AI extraction → validation → DB persist → Excel export
+- **Processing pipeline**: PDF upload → S3 storage → BullMQ job → Tesseract classification → crop → Vision AI extraction → validation → DB persist → Excel export
 - **Data storage**: PostgreSQL for all extracted data (spools, materials, unions, cuts, metadata, corrections)
 - **Notifications**: Webhook on job completion/failure
 - **Target**: < 60 seconds from batch upload to Excel-ready output
@@ -69,12 +73,14 @@ See [BUGS.md](./BUGS.md) — read before writing SQL queries, modifying DB updat
 
 ## Golden Test Suite
 
-When modifying `src/services/vision.ts` (prompt) or `src/services/crop.ts` (crop regions), run `npm run golden:check` before pushing. This processes PDFs in `tests/golden/` against the Vision API and compares with `.truth.json` ground truth. Fails on regression. Cost: ~$0.04/PDF.
+When modifying `src/services/vision.ts` (prompt), `src/services/crop.ts` (crop regions), or `src/services/classify.ts` (classification), run `npm run golden:check` before pushing. This processes PDFs in `tests/golden/` against the Vision API and compares with `.truth.json` ground truth. Fails on regression. Cost: ~$0.04/PDF.
 
-## Key Technical Decisions (Pending)
+## Key Technical Decisions
 
-- Vision AI provider for table extraction (Claude API, OpenAI, Google)
-- Region detection strategy: fixed coordinates vs. adaptive detection vs. user-configurable templates
+- **Vision AI**: Claude API (Sonnet) — decided
+- **Region detection**: Fixed %-based crops with overlapping regions — decided
+- **Format classification**: Tesseract OCR keyword detection before Vision call — implemented
+- **Pending**: Prompt routing per family (use classification result to select optimized prompts/crops per format)
 
 
 <!-- BEGIN BRAINGRID INTEGRATION -->

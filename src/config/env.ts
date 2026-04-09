@@ -42,7 +42,7 @@ export const env = {
   VISION_TIMEOUT_MS: parseInt(process.env.VISION_TIMEOUT_MS || '30000', 10),
   CROP_DPI: parseInt(process.env.CROP_DPI || '600', 10),
   CAJETIN_DPI: parseInt(process.env.CAJETIN_DPI || '800', 10),
-  AI_WORKER_CONCURRENCY: parseInt(process.env.AI_WORKER_CONCURRENCY || '3', 10),
+  AI_WORKER_CONCURRENCY: parseInt(process.env.AI_WORKER_CONCURRENCY || '5', 10),
   VISION_MAX_COST_PER_JOB_USD: parseFloat(process.env.VISION_MAX_COST_PER_JOB_USD || '20'),
 };
 
