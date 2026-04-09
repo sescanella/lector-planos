@@ -4,7 +4,6 @@ import { Plus, Download, Loader2, Trash2 } from 'lucide-react';
 import { useJobs, useDeleteJob } from '@/api/jobs';
 import { useCreateExport } from '@/api/exports';
 import {
-  TechnicalLabel,
   StateBadge,
   ProgressBar,
   PrimaryButton,
@@ -170,9 +169,7 @@ export default function OTsPage() {
   // -- Shared header + conditional content ---------------------------------
   return (
     <>
-      <TechnicalLabel system="SISTEMA 01" name="ÓRDENES DE TRABAJO" />
-
-      <div className="mt-4 flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <h1 className="font-sans text-[clamp(1.75rem,3vw,2.5rem)] font-extrabold uppercase tracking-[-0.02em] text-white">
           OTs
         </h1>

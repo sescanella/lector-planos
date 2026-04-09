@@ -4,7 +4,6 @@ import { Download, Loader2, ChevronRight, FileText, AlertCircle } from 'lucide-r
 import { useJob } from '@/api/jobs';
 import { useCreateExport, useExportStatus } from '@/api/exports';
 import {
-  TechnicalLabel,
   Breadcrumbs,
   StateBadge,
   ProgressBar,
@@ -20,21 +19,19 @@ import { otDisplayName, mapStatus, isValidDownloadUrl } from '@/lib/ot-helpers';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Calculate estimated time remaining */
-function calcETA(createdAt: string, processedCount: number, fileCount: number): string | null {
-  if (processedCount < 3) return 'CALCULANDO...';
-
-  const elapsed = Date.now() - new Date(createdAt).getTime();
+/** Estimate remaining time: 69 seconds per remaining file */
+function calcETA(processedCount: number, fileCount: number): string {
   const remaining = fileCount - processedCount;
-  const estimatedMs = (elapsed / processedCount) * remaining;
-  const estimatedMin = Math.round(estimatedMs / 60_000);
+  if (remaining <= 0) return '~1 MIN';
 
-  if (estimatedMin < 1) return '~1 MIN';
-  if (estimatedMin < 60) return `~${estimatedMin} MIN`;
+  const totalSec = remaining * 69;
+  const min = Math.ceil(totalSec / 60);
 
-  const hours = Math.floor(estimatedMin / 60);
-  const mins = estimatedMin % 60;
-  return `~${hours} H ${mins} MIN`;
+  if (min < 60) return `~${min} MIN`;
+
+  const hours = Math.floor(min / 60);
+  const mins = min % 60;
+  return mins > 0 ? `~${hours} H ${mins} MIN` : `~${hours} H`;
 }
 
 /** Calculate processing duration from created_at to completed_at */
@@ -71,34 +68,6 @@ function downloadButtonLabel(state: DownloadState, isPartial: boolean, processed
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-/** Counter cell for the 2x2 processing grid */
-function CounterCell({
-  value,
-  label,
-  format,
-}: {
-  value: number | null;
-  label: string;
-  format?: (n: number) => string;
-}) {
-  return (
-    <div className="bg-white/[0.04] border border-white/[0.08] p-6 flex flex-col items-center justify-center">
-      {value !== null ? (
-        <span className="font-heading text-[clamp(2.5rem,5vw,4rem)] font-semibold tracking-[-0.02em] text-white">
-          <AnimatedCounter value={value} format={format} />
-        </span>
-      ) : (
-        <span className="font-heading text-[clamp(2.5rem,5vw,4rem)] font-semibold tracking-[-0.02em] text-white/30">
-          —
-        </span>
-      )}
-      <span className="font-heading text-[11px] font-semibold tracking-[0.25em] uppercase text-white/40 mt-2">
-        {label}
-      </span>
-    </div>
-  );
-}
 
 /** Collapsible file list for result mode */
 function FileList({ files }: { files: JobFile[] }) {
@@ -340,17 +309,8 @@ export default function OTDetailPage() {
         ]}
       />
 
-      {/* Technical label */}
-      <div className="mt-4">
-        <TechnicalLabel
-          system="SISTEMA 03"
-          name={processing ? 'PROCESAMIENTO' : 'RESULTADO'}
-          metadata={displayName}
-        />
-      </div>
-
       {/* Header row */}
-      <div className="mt-6 flex items-center justify-between">
+      <div className="mt-4 flex items-center justify-between">
         <h1 className="font-sans text-[clamp(1.25rem,2vw,1.75rem)] font-bold text-white">
           {job.name || displayName}
         </h1>
@@ -390,48 +350,61 @@ function ProcessingMode({ job }: { job: JobDetail }) {
       ? Math.round((job.processed_count / job.file_count) * 100)
       : 0;
 
-  const eta = calcETA(job.created_at, job.processed_count, job.file_count);
+  const eta = calcETA(job.processed_count, job.file_count);
   const files = job.files ?? [];
 
   return (
-    <div aria-live="polite" aria-atomic="true">
-      {/* Counter grid 2x2 */}
-      <div className="mt-8 grid grid-cols-2 gap-px max-w-2xl mx-auto">
-        <CounterCell
-          value={job.processed_count}
-          label="PLANOS"
-          format={(n) => `${Math.round(n)}/${job.file_count}`}
+    <div aria-live="polite" aria-atomic="true" className="mt-12 flex flex-col items-center">
+      {/* Pulse animation */}
+      <style>{`
+        @keyframes processingPulse {
+          0%, 100% { opacity: 0.15; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(1.05); }
+        }
+        @keyframes processingRing {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      {/* Animated loader */}
+      <div className="relative w-32 h-32 flex items-center justify-center">
+        {/* Outer pulse */}
+        <div
+          className="absolute inset-0 rounded-full border border-accent/20"
+          style={{ animation: 'processingPulse 3s ease-in-out infinite' }}
         />
-        {/* TODO: Reemplazar con datos de GET /api/v1/jobs/:jobId/progress
-            cuando el endpoint exista. Ver .planning/ux/flow-v1.md seccion 13. */}
-        <CounterCell value={null} label="MATERIALES" />
-        <CounterCell value={null} label="SOLDADURAS" />
-        <CounterCell value={null} label="CORTES" />
+        {/* Spinning ring */}
+        <div
+          className="absolute inset-2 rounded-full border-2 border-transparent border-t-accent/60"
+          style={{ animation: 'processingRing 2s linear infinite' }}
+        />
+        {/* Center counter */}
+        <div className="flex flex-col items-center">
+          <span className="font-heading text-2xl font-semibold text-white">
+            <AnimatedCounter value={job.processed_count} format={(n) => String(Math.round(n))} />
+            <span className="text-white/30">/{job.file_count}</span>
+          </span>
+        </div>
       </div>
 
+      {/* Label */}
+      <p className="mt-6 font-heading text-[11px] font-semibold tracking-[0.25em] uppercase text-white/40">
+        Procesando planos
+      </p>
+
       {/* Progress bar */}
-      <div className="mt-6 max-w-2xl mx-auto">
+      <div className="mt-6 w-full max-w-sm">
         <ProgressBar value={progressPct} />
       </div>
 
-      {/* Estimated time */}
-      {eta && (
-        <div className="mt-4 max-w-2xl mx-auto flex items-center gap-3">
-          <span className="text-accent text-[10px]" aria-hidden="true">
-            ◆
-          </span>
-          <span className="font-heading text-[11px] font-semibold tracking-[0.3em] uppercase text-white/85">
-            TIEMPO ESTIMADO
-          </span>
-          <div className="w-10 h-px bg-white/20" aria-hidden="true" />
-          <span className="font-heading text-[11px] font-semibold tracking-[0.08em] text-white/60">
-            {eta}
-          </span>
-        </div>
-      )}
+      {/* ETA */}
+      <p className="mt-4 font-heading text-[11px] tracking-[0.08em] text-white/40">
+        Tiempo estimado: <span className="text-white/60">{eta}</span>
+      </p>
 
       {/* Individual errors during processing */}
-      <div className="max-w-2xl mx-auto">
+      <div className="mt-4 w-full max-w-2xl">
         <ProcessingErrors files={files} />
       </div>
     </div>

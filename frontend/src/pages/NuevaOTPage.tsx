@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Upload, FileText, Play, Loader2, X } from 'lucide-react';
 import {
   Breadcrumbs,
-  TechnicalLabel,
   PrimaryButton,
   OutlineButton,
   ErrorBanner,
@@ -11,6 +10,7 @@ import {
 import { useCreateJob } from '@/api/jobs';
 import { useUploadQueue } from '@/hooks/useUploadQueue';
 import { UPLOAD } from '@/constants';
+import { formatFileSize } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,12 +30,6 @@ let localFileCounter = 0;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function validateFile(
   file: File,
@@ -204,11 +198,6 @@ export function NuevaOTPage() {
         items={[{ label: 'OTs', href: '/ots' }, { label: 'Nueva OT' }]}
       />
 
-      {/* Technical label */}
-      <div className="mt-4">
-        <TechnicalLabel system="SISTEMA 02" name="NUEVA ORDEN DE TRABAJO" />
-      </div>
-
       {/* Page title */}
       <h1
         className="mb-8 mt-4 font-sans font-extrabold uppercase tracking-[-0.02em] text-white"
@@ -226,13 +215,14 @@ export function NuevaOTPage() {
 
       {/* ---------- Campo: Nombre ---------- */}
       <div>
-        <label className="mb-2 flex items-center gap-2">
+        <label htmlFor="ot-nombre" className="mb-2 flex items-center gap-2">
           <span className="text-[10px] leading-none text-accent">◆</span>
           <span className="font-heading text-[11px] font-semibold uppercase tracking-[0.25em] text-white/60">
             Nombre
           </span>
         </label>
         <input
+          id="ot-nombre"
           type="text"
           value={nombre}
           onChange={e => setNombre(e.target.value)}
@@ -286,6 +276,7 @@ export function NuevaOTPage() {
           type="file"
           accept=".pdf"
           multiple
+          aria-label="Seleccionar archivos PDF"
           className="hidden"
           onChange={handleFileInputChange}
         />
@@ -306,7 +297,7 @@ export function NuevaOTPage() {
             {localFiles.some(f => f.rejected) && (
               <>
                 <span className="text-[6px] text-white/20" aria-hidden="true">●</span>
-                <span className="text-[#F87171]">
+                <span className="text-state-error">
                   {localFiles.filter(f => f.rejected).length} rechazado{localFiles.filter(f => f.rejected).length !== 1 ? 's' : ''}
                 </span>
               </>
@@ -325,7 +316,7 @@ export function NuevaOTPage() {
                     {lf.file.name}
                   </span>
                   {lf.rejected && lf.rejectReason && (
-                    <span className="font-heading text-[11px] text-[#F87171]">
+                    <span className="font-heading text-[11px] text-state-error">
                       {lf.rejectReason}
                     </span>
                   )}
@@ -355,7 +346,7 @@ export function NuevaOTPage() {
           <span className="font-heading text-[11px] font-semibold text-white/60">
             Subiendo: {upload.completedCount} / {upload.totalCount} archivos
             {upload.failedCount > 0 && (
-              <span className="ml-2 text-[#F87171]">
+              <span className="ml-2 text-state-error">
                 · {upload.failedCount} con error
               </span>
             )}
@@ -382,7 +373,7 @@ export function NuevaOTPage() {
                     {uf.file.name}
                   </span>
                   {uf.status === 'failed' && uf.error && (
-                    <span className="font-heading text-[11px] text-[#F87171]">
+                    <span className="font-heading text-[11px] text-state-error">
                       {uf.error}
                     </span>
                   )}
