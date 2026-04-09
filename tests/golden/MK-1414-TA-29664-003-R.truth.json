@@ -1,0 +1,33 @@
+{
+  "cajetin": {
+    "ot": "76400-472095",
+    "of": "20832",
+    "tagSpool": "MK-1414-TA-29664-003-R",
+    "diameter": "3\"",
+    "client": "Fluor-Salfa",
+    "endClient": "CENTINELA",
+    "line": "3\"-TA-1414-SR2-29664",
+    "revision": "0"
+  },
+  "materiales": {
+    "count": 4,
+    "spot_checks": [
+      { "item": "1", "diameter": "3", "code": "5356516RL1" },
+      { "item": "2", "diameter": "3X3", "code": "5374123RL1" }
+    ]
+  },
+  "soldaduras": {
+    "count": 6,
+    "spot_checks": [
+      { "weldNumber": "1", "diameter": "3\"", "weldType": "SO" },
+      { "weldNumber": "2", "diameter": "3\"", "weldType": "BW" }
+    ]
+  },
+  "cortes": {
+    "count": 3,
+    "spot_checks": [
+      { "cutNumber": "A", "diameter": "3\"", "length": "110" },
+      { "cutNumber": "C", "diameter": "3\"", "length": "143" }
+    ]
+  }
+}

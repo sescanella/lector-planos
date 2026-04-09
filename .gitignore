@@ -9,3 +9,13 @@ dist/
 
 # BrainGrid temp files
 .braingrid/temp/
+
+# Training bench — source images are large, only track configs and results
+training-bench/incoming/
+training-bench/formats/*/samples/*/source.*
+training-bench/formats/*/golden-examples/*.png
+training-bench/formats/*/golden-examples/*.jpg
+.vercel
+
+# Golden test PDFs (binary, keep local only — truth JSONs are tracked)
+tests/golden/*.pdf

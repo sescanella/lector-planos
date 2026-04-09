@@ -63,6 +63,14 @@ The domain knowledge and extraction logic from `../PDF-Listado-Materiales/src/` 
 - Excel output structure: 3 sheets (Materiales, Soldaduras, Cortes)
 - Data fields per region (ITEM, DIAM., CODIGO, etc.)
 
+## Bug Registry
+
+See [BUGS.md](./BUGS.md) — read before writing SQL queries, modifying DB updates, or changing the Vision prompt.
+
+## Golden Test Suite
+
+When modifying `src/services/vision.ts` (prompt) or `src/services/crop.ts` (crop regions), run `npm run golden:check` before pushing. This processes PDFs in `tests/golden/` against the Vision API and compares with `.truth.json` ground truth. Fails on regression. Cost: ~$0.04/PDF.
+
 ## Key Technical Decisions (Pending)
 
 - Vision AI provider for table extraction (Claude API, OpenAI, Google)

@@ -1,0 +1,33 @@
+{
+  "cajetin": {
+    "ot": "76400-472031",
+    "of": "20832",
+    "tagSpool": "MK-1414-PW-13774-002-R",
+    "diameter": "8\"",
+    "client": "Fluor-Salfa",
+    "endClient": "CENTINELA",
+    "line": "8\"-PW-1414-LL18-13774",
+    "revision": "0"
+  },
+  "materiales": {
+    "count": 3,
+    "spot_checks": [
+      { "item": "1", "diameter": "8", "code": "5356516RL1", "quantity": "2470 MM" },
+      { "item": "3", "diameter": "8", "code": "5597464RL", "quantity": "2" }
+    ]
+  },
+  "soldaduras": {
+    "count": 4,
+    "spot_checks": [
+      { "weldNumber": "1", "diameter": "8\"", "weldType": "SO" },
+      { "weldNumber": "4", "diameter": "8\"", "weldType": "SO" }
+    ]
+  },
+  "cortes": {
+    "count": 2,
+    "spot_checks": [
+      { "cutNumber": "A", "diameter": "8\"", "length": "2286", "end1": "SQ.CUT", "end2": "BEVEL" },
+      { "cutNumber": "B", "diameter": "8\"", "length": "184", "end1": "BEVEL", "end2": "SQ.CUT" }
+    ]
+  }
+}
