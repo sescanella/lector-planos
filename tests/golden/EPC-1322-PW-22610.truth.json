@@ -1,0 +1,17 @@
+{
+  "cajetin": {
+    "tagSpool": "MK-1322-PW-22610-008, MK-1322-PW-22610-009, MK-1322-PW-22610-010, MK-1322-PW-22610-011, MK-1322-PW-22610-012, MK-1322-PW-22610-013, MK-1322-PW-22610-034",
+    "diameter": "4\"",
+    "line": "4\"-PW-1322-LL18-22610",
+    "revision": "1"
+  },
+  "materiales": {
+    "count": 9,
+    "spot_checks": [
+      { "item": "1", "diameter": "4", "code": "5356033RL1" },
+      { "item": "3", "diameter": "4", "code": "5597464RL" },
+      { "item": "7", "code": "5306560DMC1" },
+      { "item": "8", "code": "X759C5W" }
+    ]
+  }
+}

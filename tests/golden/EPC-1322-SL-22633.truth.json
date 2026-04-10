@@ -1,0 +1,17 @@
+{
+  "cajetin": {
+    "tagSpool": "MK-1322-SL-22633-001, MK-1322-SL-22633-002",
+    "diameter": "3\"",
+    "line": "3\"-SL-1322-SR2-22633",
+    "revision": "1"
+  },
+  "materiales": {
+    "count": 6,
+    "spot_checks": [
+      { "item": "1", "diameter": "3", "code": "5356516RL1", "quantity": "12.0 M" },
+      { "item": "2", "diameter": "3", "code": "5597464RL", "quantity": "4" },
+      { "item": "5", "code": "SS606CA4-3" },
+      { "item": "6", "code": "G301CA-3" }
+    ]
+  }
+}
