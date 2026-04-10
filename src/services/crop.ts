@@ -32,12 +32,17 @@ export interface PageDimensions {
  * 20% overlap between table crops prevents items lost at boundaries.
  * DPI values read from env vars (CROP_DPI, CAJETIN_DPI) so they are configurable.
  */
-export function getFixedCrops(): CropRegion[] {
+export function getFixedCrops(family?: 'spool' | 'isometric' | 'unknown'): CropRegion[] {
+  // Isometric drawings have a wider page — full-width cajetín triggers OOM guard
+  // and gets compressed to ~318 DPI. Using right-half only (45-100%) keeps ~578 DPI
+  // while still capturing all structured fields (NUMERO DE LINEA, CONTRATO, REV, etc.)
+  const cajetinLeft = (family === 'isometric') ? 45 : 0;
+
   return [
     { id: 'right_upper',     leftPct: 45, topPct:  0, rightPct: 100, bottomPct: 40, dpi: env.CROP_DPI },
     { id: 'right_center',    leftPct: 45, topPct: 20, rightPct: 100, bottomPct: 60, dpi: env.CROP_DPI },
     { id: 'right_lower',     leftPct: 45, topPct: 45, rightPct: 100, bottomPct: 82, dpi: env.CROP_DPI },
-    { id: 'cajetin_titleblk', leftPct: 0, topPct: 75, rightPct: 100, bottomPct: 100, dpi: env.CAJETIN_DPI },
+    { id: 'cajetin_titleblk', leftPct: cajetinLeft, topPct: 75, rightPct: 100, bottomPct: 100, dpi: env.CAJETIN_DPI },
   ];
 }
 

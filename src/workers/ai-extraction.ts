@@ -6,7 +6,7 @@ import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getPool } from '../db';
 import { env } from '../config/env';
 import { downloadByKey, getClient as getS3Client } from '../services/s3';
-import { cropRegionsFromPdf } from '../services/crop';
+import { cropRegionsFromPdf, getFixedCrops } from '../services/crop';
 import {
   extractFromCrops,
   VisionExtractionResult,
@@ -265,32 +265,25 @@ export function createAiExtractionProcessor(): AiProcessorFn {
       throw err;
     }
 
-    // 2.5 + 3-4. Classify and crop in parallel
+    // 2.5. Classify drawing family (fast, ~400ms)
     let classification: ClassificationResult | null = null;
-    let crops: Map<string, Buffer>;
-
     try {
-      const [classResult, cropResult] = await Promise.all([
-        classifyDrawing(pdfPath, pageNumber).catch((err) => {
-          console.warn(`Classification failed for spool ${spoolId}:`, (err as Error).message);
-          return null;
-        }),
-        cropRegionsFromPdf(pdfPath, pageNumber),
-      ]);
-
-      classification = classResult;
-      crops = cropResult;
-
-      if (classification) {
-        console.log(
-          `Classification: spool=${spoolId}, family=${classification.family}, ` +
-          `confidence=${classification.confidence.toFixed(2)}, ` +
-          `keywords=[${classification.keywords.join(', ')}], ` +
-          `duration=${classification.durationMs}ms`,
-        );
-      }
+      classification = await classifyDrawing(pdfPath, pageNumber);
+      console.log(
+        `Classification: spool=${spoolId}, family=${classification.family}, ` +
+        `confidence=${classification.confidence.toFixed(2)}, ` +
+        `keywords=[${classification.keywords.join(', ')}], ` +
+        `duration=${classification.durationMs}ms`,
+      );
     } catch (err) {
-      // If cropRegionsFromPdf fails, handle as before
+      console.warn(`Classification failed for spool ${spoolId}:`, (err as Error).message);
+    }
+
+    // 3-4. Crop 4 fixed regions (family-aware: isometric gets narrower cajetín for higher DPI)
+    let crops: Map<string, Buffer>;
+    try {
+      crops = await cropRegionsFromPdf(pdfPath, pageNumber, getFixedCrops(classification?.family));
+    } catch (err) {
       await pool.query(
         `UPDATE spool SET vision_status = 'failed', extraction_data = $2 WHERE spool_id = $1`,
         [spoolId, JSON.stringify({ error: `Crop failed: ${(err as Error).message}` })],

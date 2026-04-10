@@ -61,7 +61,7 @@ const BOLD = '\x1b[1m';
 
 function normalize(val: unknown): string {
   if (val === null || val === undefined) return '';
-  return String(val).trim().toLowerCase().replace(/["''″]/g, '');
+  return String(val).trim().toLowerCase().replace(/["''″]/g, '').replace(/×/g, 'x');
 }
 
 function compareField(field: string, expected: string, actual: unknown): FieldResult {
