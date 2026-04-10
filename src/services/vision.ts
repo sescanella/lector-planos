@@ -133,6 +133,7 @@ TABLE RULES:
 - If a table does not exist in any image, set that section to null (not empty array)
 - If a table has headers but zero data rows, set rows=[] and totalRowsDetected=0
 - Blank/unfilled fields (common in pre-fabrication drawings) should be null, not empty string
+- The CANT./CANTIDAD (quantity) column is ALWAYS the rightmost data column in material tables. It MUST appear in rawHeaders and every row must have a quantity value. Revision triangle markers (△ with circled numbers like △1, △2) are annotations overlaid on the table — they are NOT data. Ignore them and read the actual quantity number underneath or beside them (e.g., "18.5 M", "3", "14"). If a quantity appears partially obscured by a triangle, extract the visible number.
 
 CAJETÍN (TITLE BLOCK) RULES — use image (4) only:
 - ot: The field labeled "OT:", "N° OT", or "ORDEN DE TRABAJO" — a numeric/alphanumeric code, typically format "76400-XXXXXX" or similar. It is NOT the "REFERENCIA P&ID" (which looks like "1002-03-ID-EPC-..."). It is NOT the "ORDEN DE COMPRA". If no such field exists in the drawing (e.g. EPC/Centinela format), set to null.
@@ -180,6 +181,7 @@ TABLE RULES:
 - If a table does not exist in any image, set that section to null (not empty array)
 - If a table has headers but zero data rows, set rows=[] and totalRowsDetected=0
 - Blank/unfilled fields (common in pre-fabrication drawings) should be null, not empty string
+- The CANT./CANTIDAD (quantity) column is ALWAYS the rightmost data column in material tables. It MUST appear in rawHeaders and every row must have a quantity value. Revision triangle markers (△ with circled numbers like △1, △2) are annotations overlaid on the table — they are NOT data. Ignore them and read the actual quantity number underneath or beside them (e.g., "18.5 M", "3", "14"). If a quantity appears partially obscured by a triangle, extract the visible number.
 
 CAJETÍN (TITLE BLOCK) RULES — use image (4) only:
 - ot: null (isometric drawings do not have OT field)
